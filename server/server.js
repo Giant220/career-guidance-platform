@@ -10,9 +10,26 @@ const admin = require('./config/firebase');
 
 const app = express();
 
-// Security Middleware
+// Security Middleware - Allow Firebase connections
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      connectSrc: [
+        "'self'", 
+        "https://identitytoolkit.googleapis.com", 
+        "https://career-bridge-lesotho.firebaseapp.com", 
+        "https://career-bridge-lesotho.firebaseio.com",
+        "https://career-bridge-lesotho.firebasestorage.app",
+        "https://firestore.googleapis.com"
+      ],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https:"],
+      imgSrc: ["'self'", "data:", "https:"],
+      fontSrc: ["'self'", "https:", "data:"]
+    }
+  }
 }));
 
 app.set('trust proxy', 1);
