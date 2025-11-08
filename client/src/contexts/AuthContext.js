@@ -20,13 +20,18 @@ export function AuthProvider({ children }) {
   const [userRole, setUserRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Get API URL from environment variable or use localhost for development
+  const getApiUrl = () => {
+    return process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  };
+
   const signup = async (email, password, userData) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
       console.log('Creating user in backend...');
-      const response = await fetch('/api/auth/signup', {
+      const response = await fetch(`${getApiUrl()}/api/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -81,7 +86,7 @@ export function AuthProvider({ children }) {
   const fetchUserRole = async (uid) => {
     try {
       console.log('Fetching user role from backend...');
-      const response = await fetch(`http://localhost:5000/api/auth/user/${uid}`);
+      const response = await fetch(`${getApiUrl()}/api/auth/user/${uid}`);
       
       console.log('Response status:', response.status);
       
