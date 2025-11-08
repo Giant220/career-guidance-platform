@@ -1,0 +1,16 @@
+{
+  "name": "career-bridge-lesotho",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm start",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "install-all": "npm install && cd server && npm install && cd ../client && npm install",
+    "setup-db": "cd server && node scripts/populateDatabase.js"
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0"
+  }
+}

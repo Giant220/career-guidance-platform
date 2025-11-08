@@ -1,0 +1,486 @@
+/* Reset and Base Styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background: #1e1e2f;
+  color: wheat;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-size: 16px;
+}
+
+/* Navigation */
+.navbar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 2rem;
+  background: linear-gradient(90deg, #0f2027, #203a43, #2c5364);
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.logo-area {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.logo {
+  height: 40px;
+  width: 40px;
+  object-fit: contain;
+  display: block;
+  border-radius: 6px;
+}
+
+.brand {
+  color: #ffda77;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.nav-links {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+}
+
+.nav-links a {
+  color: #fff;
+  text-decoration: none;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+}
+
+.nav-links a:hover {
+  background: #ffda77;
+  color: #1c1c1c;
+}
+
+/* Main Content */
+.main-content {
+  width: 100%;
+  padding: 2rem;
+  min-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+/* New Hero Section */
+.hero-section {
+  text-align: center;
+  padding: 3rem 2rem;
+  background: linear-gradient(135deg, #1e1e2f 0%, #2c2c38 100%);
+  border-radius: 14px;
+  margin-bottom: 2rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+
+.hero-section h1 {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  color: #00aaff;
+}
+
+.hero-section p {
+  font-size: 1.3rem;
+  margin-bottom: 3rem; /* Increased to prevent button overlap */
+  color: wheat;
+  line-height: 1.6;
+}
+
+.hero-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 1rem; /* Added for extra separation */
+}
+
+/* Sections & Cards */
+.section, .form-container, .table-container, .dashboard-card {
+  background: #2c2c38;
+  border-radius: 14px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+
+.card {
+  background: #2c2c38;
+  border-radius: 14px;
+  padding: 2rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  transition: transform 0.3s ease;
+  display: flex; /* Added: Flex column for better spacing */
+  flex-direction: column;
+  justify-content: space-between; /* Distribute space to prevent overlap */
+  min-height: 250px; /* Added: Consistent height */
+}
+
+.card:hover {
+  transform: translateY(-5px);
+}
+
+.card-icon {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.card h3 {
+  margin-bottom: 1rem;
+}
+
+.card p {
+  margin-bottom: 2rem; /* Increased to push button down */
+  flex-grow: 1; /* Let paragraph take space */
+}
+
+.card .btn {
+  margin-top: 1rem; /* Added: Extra top margin for button */
+}
+
+/* Roles Grid */
+.roles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+/* How It Works */
+.how-it-works {
+  display: flex;
+  justify-content: space-around;
+  gap: 2rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.step {
+  flex: 1;
+  min-width: 250px;
+  text-align: center;
+}
+
+.step h3 {
+  color: #ffda77;
+  font-size: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.step p {
+  color: wheat;
+  line-height: 1.5;
+}
+
+/* Headings */
+h1, h2, h3 {
+  color: #00aaff;
+  margin-bottom: 1.5rem;
+}
+
+h1 {
+  font-size: 2.5rem;
+}
+
+h2 {
+  font-size: 2rem;
+}
+
+h3 {
+  font-size: 1.5rem;
+}
+
+/* Forms */
+.form {
+  width: 100%;
+}
+
+.form input, .form select, .form textarea {
+  width: 100%;
+  padding: 0.8rem;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: #1e1e2f;
+  color: wheat;
+  font-size: 1rem;
+}
+
+.form input:focus, .form select:focus, .form textarea:focus {
+  outline: none;
+  border-color: #00aaff;
+}
+
+.form label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #ffda77;
+  font-weight: 500;
+}
+
+/* Buttons */
+.btn {
+  background: #00aaff;
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.btn:hover {
+  background: #0099ee;
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background: #6b46c1;
+}
+
+.btn-secondary:hover {
+  background: #553c9a;
+}
+
+.btn-danger {
+  background: #e53e3e;
+}
+
+.btn-danger:hover {
+  background: #c53030;
+}
+
+/* Tables */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.data-table th, .data-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #444;
+  text-align: left;
+  color: wheat;
+}
+
+.data-table th {
+  background: #1c1c1c;
+  color: #ffda77;
+  font-weight: 600;
+}
+
+.data-table tr:hover {
+  background: #363646;
+}
+
+/* Dashboard Layout */
+.dashboard-top {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-top .card {
+  flex: 1;
+  min-width: 200px;
+  text-align: center;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+/* Course Cards */
+.courses-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.course-card {
+  background: #2c2c38;
+  border-radius: 14px;
+  padding: 1.5rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease;
+}
+
+.course-card:hover {
+  transform: translateY(-5px);
+}
+
+.course-card h3 {
+  color: #00aaff;
+  margin-bottom: 0.5rem;
+}
+
+.course-card .institution {
+  color: #ffda77;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.course-card .requirements {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #444;
+}
+
+.requirement-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+  font-size: 0.9rem;
+}
+
+/* Status Badges */
+.status-badge {
+  display: inline-block;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-admitted {
+  background: #48bb78;
+  color: white;
+}
+
+.status-rejected {
+  background: #f56565;
+  color: white;
+}
+
+.status-pending {
+  background: #ed8936;
+  color: white;
+}
+
+.status-qualified {
+  background: #4299e1;
+  color: white;
+}
+
+/* Footer */
+.app-footer {
+  width: 100%;
+  padding: 1.5rem;
+  background: #1c1c1c;
+  color: #ffda77;
+  text-align: center;
+  font-size: 0.9rem;
+  margin-top: auto;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .navbar .nav-links {
+    display: none;
+  }
+  
+  .hero-section {
+    padding: 2rem 1rem;
+  }
+  
+  .hero-section h1 {
+    font-size: 2rem;
+  }
+  
+  .hero-section p {
+    margin-bottom: 2rem; /* Adjusted for mobile */
+  }
+  
+  .hero-buttons {
+    flex-direction: column; /* Vertical stacking to prevent overlap */
+    align-items: center;
+  }
+  
+  .roles-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .how-it-works {
+    flex-direction: column;
+  }
+  
+  .main-content {
+    padding: 1rem;
+  }
+}
+
+/* Utility Classes */
+.text-center {
+  text-align: center;
+}
+
+.text-gold {
+  color: #ffda77;
+}
+
+.text-blue {
+  color: #00aaff;
+}
+
+.mb-1 {
+  margin-bottom: 1rem;
+}
+
+.mt-1 {
+  margin-top: 1rem;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hidden {
+  display: none;
+}
+
+.error {
+  color: #f56565;
+  font-weight: bold;
+  margin-bottom: 1rem;
+}
+
+.success {
+  color: #48bb78;
+  font-weight: bold;
+  margin-bottom: 1rem;
+}

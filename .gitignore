@@ -1,0 +1,29 @@
+# Environment variables
+.env
+.env.local
+.env.production
+*.env
+
+# Firebase
+firebase-service-account.json
+firebase.json
+.firebase/
+*.key
+*.pem
+
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Build outputs
+client/build/
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db

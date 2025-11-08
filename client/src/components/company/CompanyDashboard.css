@@ -1,0 +1,399 @@
+.company-dashboard {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.company-home .company-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.company-home .company-header h1 {
+  color: #00aaff;
+  margin-bottom: 0.5rem;
+}
+
+.company-home .company-header p {
+  color: wheat;
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+}
+
+/* Job Management */
+.jobs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.job-management-card {
+  background: #363646;
+  padding: 1.5rem;
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border: 1px solid #444;
+}
+
+.job-management-card:hover {
+  border-color: #00aaff;
+}
+
+.job-management-card.closed {
+  opacity: 0.7;
+}
+
+.job-info h4 {
+  color: #00aaff;
+  margin-bottom: 0.5rem;
+  font-size: 1.2rem;
+}
+
+.job-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.job-meta {
+  color: #ffda77;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.job-description {
+  color: #ccc;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.job-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.deadline, .post-date {
+  color: wheat;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.job-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 120px;
+}
+
+/* Applications Table */
+.match-badge {
+  display: inline-block;
+  padding: 0.3rem 0.8rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.match-badge.high {
+  background: #48bb78;
+  color: white;
+}
+
+.match-badge.medium {
+  background: #ed8936;
+  color: white;
+}
+
+.match-badge.low {
+  background: #f56565;
+  color: white;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-content {
+  background: #2c2c38;
+  border-radius: 12px;
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #444;
+}
+
+.modal-header h2 {
+  color: #00aaff;
+  margin: 0;
+}
+
+.candidate-details {
+  padding: 1.5rem;
+}
+
+.detail-section {
+  margin-bottom: 2rem;
+}
+
+.detail-section h3 {
+  color: #ffda77;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #444;
+  padding-bottom: 0.5rem;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #363646;
+}
+
+.detail-item strong {
+  color: #ffda77;
+}
+
+.detail-item span {
+  color: wheat;
+}
+
+.qualification-item {
+  background: #363646;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border-left: 4px solid #00aaff;
+}
+
+.qualification-item h4 {
+  color: #00aaff;
+  margin-bottom: 0.5rem;
+}
+
+.qualification-item p {
+  color: wheat;
+  margin-bottom: 0.5rem;
+}
+
+.document-type {
+  background: #444;
+  color: #ffda77;
+  padding: 0.3rem 0.8rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  text-transform: capitalize;
+}
+
+.verification-badge {
+  background: #48bb78;
+  color: white;
+  padding: 0.3rem 0.8rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
+}
+
+.status-actions {
+  margin-bottom: 1rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #444;
+}
+
+/* Reports */
+.funnel-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 2rem;
+  margin: 2rem 0;
+}
+
+.funnel-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stage-label {
+  color: #ffda77;
+  font-weight: 600;
+  text-align: center;
+}
+
+.stage-count {
+  color: #00aaff;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.stage-bar {
+  width: 80px;
+  background: linear-gradient(135deg, #00aaff, #0099ee);
+  border-radius: 8px 8px 0 0;
+}
+
+.job-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.job-stat-card {
+  background: #363646;
+  padding: 1.5rem;
+  border-radius: 10px;
+  border: 1px solid #444;
+}
+
+.job-stat-card h4 {
+  color: #00aaff;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.quality-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.metric-card {
+  background: #363646;
+  padding: 1.5rem;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.metric-card h4 {
+  color: #ffda77;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}
+
+.metric-value {
+  color: #00aaff;
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+}
+
+.metric-bar {
+  background: #2c2c38;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.metric-fill {
+  background: linear-gradient(90deg, #00aaff, #0099ee);
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.3s ease;
+}
+
+/* Form Styles */
+.qualification-input {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  align-items: center;
+}
+
+.qualification-input input {
+  flex: 1;
+}
+
+.btn-warning {
+  background: #ed8936;
+}
+
+.btn-warning:hover {
+  background: #dd7724;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .job-management-card {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .job-actions {
+    flex-direction: row;
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  .filters-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .funnel-container {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .funnel-stage {
+    flex-direction: row;
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .stage-bar {
+    width: 100%;
+    height: 20px !important;
+    border-radius: 8px;
+  }
+  
+  .modal-content {
+    margin: 1rem;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+  }
+}
