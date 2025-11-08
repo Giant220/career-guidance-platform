@@ -6,7 +6,7 @@ const helmet = require('helmet');
 require('dotenv').config();
 
 // Initialize Firebase Admin
-const admin = require('./config/firebase')();
+const admin = require('./config/firebase');
 
 const app = express();
 
