@@ -10,7 +10,7 @@ const admin = require('./config/firebase');
 
 const app = express();
 
-// Security Middleware - Allow Firebase connections
+// Security Middleware - Public access friendly
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
   contentSecurityPolicy: {
@@ -18,16 +18,16 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       connectSrc: [
         "'self'", 
-        "https://identitytoolkit.googleapis.com", 
-        "https://career-bridge-lesotho.firebaseapp.com", 
-        "https://career-bridge-lesotho.firebaseio.com",
-        "https://career-bridge-lesotho.firebasestorage.app",
-        "https://firestore.googleapis.com"
+        "http:",
+        "https:",
+        "ws:",
+        "wss:"
       ],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https:"],
       styleSrc: ["'self'", "'unsafe-inline'", "https:"],
-      imgSrc: ["'self'", "data:", "https:"],
-      fontSrc: ["'self'", "https:", "data:"]
+      imgSrc: ["'self'", "data:", "https:", "http:"],
+      fontSrc: ["'self'", "https:", "data:"],
+      frameSrc: ["'self'", "https:"]
     }
   }
 }));
