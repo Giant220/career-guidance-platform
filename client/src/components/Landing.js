@@ -6,7 +6,7 @@ const Landing = () => {
     <div className="main-content">
       <div className="navbar">
         <div className="logo-area">
-          <div className="logo" style={{ backgroundColor: '#ffda77' }}></div>
+          <div className="logo" style={{ backgroundColor: '#ffda77',opacity:0 }}></div>
           <span className="brand">Career Bridge Lesotho</span>
         </div>
         <div className="nav-links">
