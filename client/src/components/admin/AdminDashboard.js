@@ -49,7 +49,7 @@ const AdminDashboard = () => {
     <div className="admin-dashboard">
       <nav className="navbar">
         <div className="logo-area">
-          <div className="logo" style={{ backgroundColor: '#ffda77' }}></div>
+          <div className="logo" style={{ backgroundColor: '#ffda77',opacity:0 }}></div>
           <span className="brand">Admin Portal</span>
         </div>
         <div className="nav-links">
