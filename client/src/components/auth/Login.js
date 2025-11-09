@@ -73,6 +73,7 @@ const Login = () => {
               value={formData.email}
               onChange={handleChange}
               required
+              placeholder="Enter your email"
             />
           </div>
 
@@ -84,6 +85,7 @@ const Login = () => {
               value={formData.password}
               onChange={handleChange}
               required
+              placeholder="Enter your password"
             />
           </div>
 
@@ -100,22 +102,6 @@ const Login = () => {
         <div className="text-center mt-1">
           <p>Don't have an account? <Link to="/signup">Sign up</Link></p>
           <p><Link to="/forgot-password">Forgot your password?</Link></p>
-        </div>
-
-        <div className="demo-accounts mt-1">
-          <h3>Demo Accounts</h3>
-          <div className="demo-account">
-            <strong>Student:</strong> student@demo.com / password123
-          </div>
-          <div className="demo-account">
-            <strong>Institution:</strong> institution@demo.com / password123
-          </div>
-          <div className="demo-account">
-            <strong>Company:</strong> company@demo.com / password123
-          </div>
-          <div className="demo-account">
-            <strong>Admin:</strong> admin@demo.com / password123
-          </div>
         </div>
       </div>
     </div>
