@@ -1,315 +1,238 @@
-const express = require('express');
-const router = express.Router();
-const admin = require('firebase-admin');
-const db = admin.firestore();
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 
-// Get student profile
-router.get('/:id/profile', async (req, res) => {
-  try {
-    const studentDoc = await db.collection('students').doc(req.params.id).get();
-    
-    if (studentDoc.exists) {
-      res.json(studentDoc.data());
-    } else {
-      // Create empty profile if doesn't exist
-      const emptyProfile = {
-        fullName: '',
-        phone: '',
-        address: '',
-        dateOfBirth: '',
-        gender: '',
-        nationality: 'Lesotho',
-        createdAt: new Date().toISOString()
-      };
-      await db.collection('students').doc(req.params.id).set(emptyProfile);
-      res.json(emptyProfile);
+const JobApplications = () => {
+  const { currentUser } = useAuth();
+  const [jobs, setJobs] = useState([]);
+  const [applications, setApplications] = useState([]);
+  const [filter, setFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [checkingQualification, setCheckingQualification] = useState(null);
+
+  useEffect(() => {
+    fetchJobs();
+    fetchJobApplications();
+  }, []);
+
+  const fetchJobs = async () => {
+    try {
+      const response = await fetch(`/api/students/${currentUser.uid}/jobs`);
+      const data = await response.json();
+      setJobs(data);
+    } catch (error) {
+      console.error('Error fetching jobs:', error);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error('Error fetching student profile:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Update student profile
-router.post('/profile', async (req, res) => {
-  try {
-    const { studentId, ...profileData } = req.body;
-    
-    // Validate phone format
-    const phoneRegex = /^\+266[0-9]{8}$/;
-    if (!phoneRegex.test(profileData.phone)) {
-      return res.status(400).json({ error: 'Invalid phone format. Must be +266 followed by 8 digits' });
-    }
-
-    // Validate name (no numbers)
-    const nameRegex = /^[A-Za-z\s]+$/;
-    if (!nameRegex.test(profileData.fullName)) {
-      return res.status(400).json({ error: 'Name can only contain letters and spaces' });
-    }
-
-    await db.collection('students').doc(studentId).set({
-      ...profileData,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-
-    res.json({ success: true, message: 'Profile updated successfully' });
-  } catch (error) {
-    console.error('Error updating student profile:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Save student grades
-router.post('/grades', async (req, res) => {
-  try {
-    const { studentId, grades } = req.body;
-    
-    // Convert grades to numerical values for comparison
-    const gradeValues = {
-      'A*': 6, 'A': 5, 'B': 4, 'C': 3, 'D': 2, 'E': 1, 'F': 0, 'Not Taken': -1
-    };
-    
-    const numericalGrades = {};
-    Object.keys(grades).forEach(subject => {
-      numericalGrades[subject] = gradeValues[grades[subject]] || -1;
-    });
-
-    await db.collection('students').doc(studentId).set({
-      grades: numericalGrades,
-      rawGrades: grades,
-      gradesUpdated: new Date().toISOString()
-    }, { merge: true });
-
-    res.json({ success: true, message: 'Grades saved successfully' });
-  } catch (error) {
-    console.error('Error saving grades:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get qualified courses for student
-router.get('/:id/qualified-courses', async (req, res) => {
-  try {
-    const studentDoc = await db.collection('students').doc(req.params.id).get();
-    
-    if (!studentDoc.exists) {
-      return res.json([]);
-    }
-
-    const student = studentDoc.data();
-    
-    if (!student || !student.grades) {
-      return res.json([]);
-    }
-
-    const coursesSnapshot = await db.collection('courses').get();
-    const qualifiedCourses = [];
-
-    coursesSnapshot.forEach(doc => {
-      const course = { id: doc.id, ...doc.data() };
-      if (qualifiesForCourse(student.grades, course.requirements)) {
-        qualifiedCourses.push(course);
-      }
-    });
-
-    res.json(qualifiedCourses);
-  } catch (error) {
-    console.error('Error fetching qualified courses:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Helper function to check if student qualifies for course
-function qualifiesForCourse(studentGrades, requirements) {
-  const gradeValues = {
-    'A*': 6, 'A': 5, 'B': 4, 'C': 3, 'D': 2, 'E': 1, 'F': 0
   };
 
-  for (const requirement of requirements) {
-    const match = requirement.match(/([A-Za-z\s]+)\s+([A-F\*])(?:\+)?/);
-    if (match) {
-      const subject = match[1].trim();
-      const minGrade = match[2];
-      const studentGrade = studentGrades[subject] || -1;
-      const minGradeValue = gradeValues[minGrade] || 0;
+  const fetchJobApplications = async () => {
+    try {
+      const response = await fetch(`/api/students/${currentUser.uid}/job-applications`);
+      const data = await response.json();
+      setApplications(data);
+    } catch (error) {
+      console.error('Error fetching job applications:', error);
+    }
+  };
 
-      if (studentGrade < minGradeValue) {
-        return false;
+  const checkQualification = async (jobId) => {
+    setCheckingQualification(jobId);
+    try {
+      const response = await fetch(`/api/students/${currentUser.uid}/jobs/${jobId}/qualify`);
+      const data = await response.json();
+      
+      if (data.qualified) {
+        await handleApply(jobId);
+      } else {
+        alert(`You do not qualify for this job:\n\n${data.reason}`);
       }
+    } catch (error) {
+      console.error('Error checking qualification:', error);
+      alert('Error checking your qualifications');
+    } finally {
+      setCheckingQualification(null);
     }
-  }
+  };
 
-  return true;
-}
-
-// Get student applications
-router.get('/:id/applications', async (req, res) => {
-  try {
-    const snapshot = await db.collection('applications')
-      .where('studentId', '==', req.params.id)
-      .orderBy('applicationDate', 'desc')
-      .get();
-    
-    const applications = [];
-    snapshot.forEach(doc => {
-      applications.push({ id: doc.id, ...doc.data() });
-    });
-
-    res.json(applications);
-  } catch (error) {
-    console.error('Error fetching applications:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get student admissions
-router.get('/:id/admissions', async (req, res) => {
-  try {
-    const snapshot = await db.collection('applications')
-      .where('studentId', '==', req.params.id)
-      .orderBy('applicationDate', 'desc')
-      .get();
-    
-    const admissions = [];
-    snapshot.forEach(doc => {
-      const app = doc.data();
-      admissions.push({ id: doc.id, ...app });
-    });
-
-    res.json(admissions);
-  } catch (error) {
-    console.error('Error fetching admissions:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Accept admission
-router.post('/accept-admission', async (req, res) => {
-  try {
-    const { studentId, admissionId, institutionId } = req.body;
-    
-    // Update the accepted admission
-    await db.collection('applications').doc(admissionId).update({
-      accepted: true,
-      acceptanceDate: new Date().toISOString()
-    });
-
-    // Reject other admissions from different institutions
-    const otherAdmissions = await db.collection('applications')
-      .where('studentId', '==', studentId)
-      .where('institutionId', '!=', institutionId)
-      .where('status', '==', 'admitted')
-      .get();
-
-    const batch = db.batch();
-    otherAdmissions.forEach(doc => {
-      batch.update(doc.ref, { 
-        status: 'rejected', 
-        rejectionReason: 'Student accepted another offer',
-        updatedAt: new Date().toISOString()
+  const handleApply = async (jobId) => {
+    try {
+      const response = await fetch(`/api/students/${currentUser.uid}/jobs/${jobId}/apply`, {
+        method: 'POST'
       });
-    });
-    await batch.commit();
 
-    res.json({ success: true, message: 'Admission accepted successfully' });
-  } catch (error) {
-    console.error('Error accepting admission:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+      const result = await response.json();
 
-// Upload transcript metadata
-router.post('/upload-transcript', async (req, res) => {
-  try {
-    const transcriptData = req.body;
-    
-    // Validate PDF data
-    if (!transcriptData.fileName?.endsWith('.pdf')) {
-      return res.status(400).json({ error: 'Only PDF files allowed' });
+      if (response.ok) {
+        alert(result.message || 'Job application submitted successfully!');
+        fetchJobs();
+        fetchJobApplications();
+      } else {
+        alert(result.error || 'Failed to submit application');
+      }
+    } catch (error) {
+      console.error('Error applying for job:', error);
+      alert('Error submitting application');
     }
+  };
 
-    const docRef = await db.collection('student_transcripts').add({
-      ...transcriptData,
-      createdAt: new Date().toISOString()
-    });
+  const hasApplied = (jobId) => {
+    return applications.some(app => app.jobId === jobId);
+  };
 
-    res.json({ success: true, transcriptId: docRef.id });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  const hasTranscripts = async () => {
+    try {
+      const response = await fetch(`/api/students/${currentUser.uid}/transcripts`);
+      const transcripts = await response.json();
+      return transcripts.length > 0;
+    } catch (error) {
+      console.error('Error checking transcripts:', error);
+      return false;
+    }
+  };
+
+  const filteredJobs = jobs.filter(job => {
+    if (filter === 'applied') return hasApplied(job.id);
+    if (filter === 'new') return !hasApplied(job.id);
+    return true;
+  });
+
+  if (loading) {
+    return <div className="section">Loading jobs...</div>;
   }
-});
 
-// Get student transcripts
-router.get('/:id/transcripts', async (req, res) => {
-  try {
-    const snapshot = await db.collection('student_transcripts')
-      .where('studentId', '==', req.params.id)
-      .orderBy('uploadDate', 'desc')
-      .get();
+  return (
+    <div className="section">
+      <h1>Job Opportunities</h1>
+      <p>Browse and apply for jobs. Upload your transcripts to qualify for relevant positions.</p>
 
-    const transcripts = [];
-    snapshot.forEach(doc => {
-      transcripts.push({ id: doc.id, ...doc.data() });
-    });
+      <div className="section">
+        <div className="flex-between mb-1">
+          <h3>Available Jobs</h3>
+          <select 
+            value={filter} 
+            onChange={(e) => setFilter(e.target.value)}
+            className="form-select"
+            style={{ width: 'auto' }}
+          >
+            <option value="all">All Jobs</option>
+            <option value="new">New Jobs</option>
+            <option value="applied">Applied Jobs</option>
+          </select>
+        </div>
 
-    res.json(transcripts);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+        <div className="jobs-grid">
+          {filteredJobs.map(job => {
+            const applied = hasApplied(job.id);
+            
+            return (
+              <div key={job.id} className="job-card">
+                <div className="job-header">
+                  <h3>{job.title}</h3>
+                  {applied && (
+                    <span className="status-badge status-applied">Applied</span>
+                  )}
+                </div>
+                
+                <p className="company">{job.companyName}</p>
+                <p className="location">{job.location}</p>
+                <p className="salary">Salary: {job.salary}</p>
+                <p className="job-type">Type: {job.type}</p>
+                
+                {job.deadline && (
+                  <p className="deadline">
+                    <strong>Apply by:</strong> {new Date(job.deadline).toLocaleDateString()}
+                  </p>
+                )}
+                
+                <div className="job-description">
+                  <p>{job.description}</p>
+                </div>
 
-// Delete transcript
-router.delete('/transcripts/:id', async (req, res) => {
-  try {
-    await db.collection('student_transcripts').doc(req.params.id).delete();
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+                <div className="requirements">
+                  <h4>Requirements:</h4>
+                  <ul>
+                    {job.requirements && job.requirements.map((req, index) => (
+                      <li key={index}>{req}</li>
+                    ))}
+                  </ul>
+                </div>
 
-// Get qualified jobs for student
-router.get('/:id/qualified-jobs', async (req, res) => {
-  try {
-    const studentDoc = await db.collection('students').doc(req.params.id).get();
-    const student = studentDoc.data();
-    
-    // For now, return all active jobs
-    const snapshot = await db.collection('jobs')
-      .where('status', '==', 'active')
-      .orderBy('postedDate', 'desc')
-      .get();
-    
-    const jobs = [];
-    snapshot.forEach(doc => {
-      jobs.push({ id: doc.id, ...doc.data() });
-    });
+                {job.qualifications && job.qualifications.length > 0 && (
+                  <div className="qualifications">
+                    <h4>Preferred Qualifications:</h4>
+                    <ul>
+                      {job.qualifications.map((qual, index) => (
+                        <li key={index}>{qual}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
-    res.json(jobs);
-  } catch (error) {
-    console.error('Error fetching jobs:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+                <div className="job-actions">
+                  {applied ? (
+                    <button className="btn btn-secondary" disabled>
+                      ✓ Applied
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={() => checkQualification(job.id)}
+                      disabled={checkingQualification === job.id}
+                      className="btn"
+                    >
+                      {checkingQualification === job.id ? 'Checking...' : 'Apply Now'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
-// Get student job applications
-router.get('/:id/job-applications', async (req, res) => {
-  try {
-    const snapshot = await db.collection('jobApplications')
-      .where('studentId', '==', req.params.id)
-      .orderBy('applicationDate', 'desc')
-      .get();
-    
-    const applications = [];
-    snapshot.forEach(doc => {
-      applications.push({ id: doc.id, ...doc.data() });
-    });
+        {filteredJobs.length === 0 && (
+          <div className="text-center">
+            <p>No jobs found matching your criteria.</p>
+          </div>
+        )}
+      </div>
 
-    res.json(applications);
-  } catch (error) {
-    console.error('Error fetching job applications:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+      {applications.length > 0 && (
+        <div className="section">
+          <h3>Your Job Applications</h3>
+          <div className="applications-list">
+            {applications.map(application => (
+              <div key={application.id} className="application-card">
+                <div className="application-info">
+                  <h4>{application.jobTitle}</h4>
+                  <p>{application.companyName}</p>
+                  <span className={`status-badge status-${application.status}`}>
+                    {application.status}
+                  </span>
+                </div>
+                <div className="application-date">
+                  Applied: {new Date(application.applicationDate).toLocaleDateString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-module.exports = router;
+      <div className="section info-message">
+        <h3>📝 How Job Applications Work</h3>
+        <ul>
+          <li><strong>View all jobs</strong> - Browse all available opportunities</li>
+          <li><strong>Upload transcripts first</strong> - Your academic records are used to check qualifications</li>
+          <li><strong>Automatic qualification check</strong> - We verify if your education matches job requirements</li>
+          <li><strong>Apply with confidence</strong> - Only apply to jobs you're qualified for</li>
+        </ul>
+        <p>
+          <strong>Don't have transcripts uploaded?</strong>{' '}
+          <a href="/student/transcript" style={{color: '#ffda77'}}>Upload them here</a> to qualify for jobs.
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default JobApplications;
