@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import VerifyEmail from './auth/VerifyEmail';
 
 const ProtectedRoute = ({ children, role }) => {
   const { currentUser, userRole } = useAuth();
@@ -17,6 +18,12 @@ const ProtectedRoute = ({ children, role }) => {
   if (!currentUser) {
     console.log('❌ No user, redirecting to login');
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Check email verification for all roles except admin
+  if (currentUser && !currentUser.emailVerified && userRole !== 'admin') {
+    console.log('📧 Email not verified, showing verification reminder');
+    return <VerifyEmail />;
   }
 
   if (role && userRole !== role) {
