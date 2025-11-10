@@ -30,6 +30,9 @@ export function AuthProvider({ children }) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
+      // Send email verification immediately
+      await sendEmailVerification(user);
+      
       console.log('Creating user in backend...');
       const response = await fetch(`${getApiUrl()}/api/auth/signup`, {
         method: 'POST',
@@ -41,7 +44,8 @@ export function AuthProvider({ children }) {
           email: email,
           fullName: userData.fullName,
           phone: userData.phone,
-          role: userData.role
+          role: userData.role,
+          emailVerified: false
         })
       });
 
@@ -56,8 +60,10 @@ export function AuthProvider({ children }) {
         });
       }
 
-      await sendEmailVerification(user);
       setUserRole(userData.role);
+      
+      // Show verification message
+      alert('Account created successfully! Please check your email for verification link before logging in.');
       
       return userCredential;
     } catch (error) {
