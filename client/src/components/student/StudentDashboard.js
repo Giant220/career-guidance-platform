@@ -27,7 +27,7 @@ const StudentDashboard = () => {
     <div className="student-dashboard">
       <nav className="navbar">
         <div className="logo-area">
-          <div className="logo" style={{ backgroundColor: '#ffda77',opacity:0}}></div>
+          <div className="logo" style={{ backgroundColor: '#ffda77',opacity:0 }}></div>
           <span className="brand">Student Portal</span>
         </div>
         <div className="nav-links">
@@ -63,20 +63,92 @@ const StudentHome = () => {
     jobsApplied: 0,
     qualifiedCourses: 0
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch student stats
     const fetchStats = async () => {
-      // Mock data - replace with actual API calls
-      setStats({
-        applications: 3,
-        admissions: 1,
-        jobsApplied: 2,
-        qualifiedCourses: 15
-      });
+      if (!currentUser?.uid) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/students/${currentUser.uid}/stats`);
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data);
+        } else {
+          // If API fails, fallback to zeros (safe)
+          console.log('Stats API not ready yet, using zeros');
+          setStats({ applications: 0, admissions: 0, jobsApplied: 0, qualifiedCourses: 0 });
+        }
+      } catch (error) {
+        console.log('Error fetching stats, using safe fallback:', error);
+        // Safe fallback - zeros won't break anything
+        setStats({ applications: 0, admissions: 0, jobsApplied: 0, qualifiedCourses: 0 });
+      } finally {
+        setLoading(false);
+      }
     };
+
     fetchStats();
-  }, []);
+  }, [currentUser]);
+
+  if (loading) {
+    return (
+      <div className="student-home">
+        <div className="section">
+          <h1>Welcome, {currentUser?.displayName || 'Student'}!</h1>
+          <p>Loading your dashboard...</p>
+          
+          <div className="dashboard-top">
+            <div className="card">
+              <h3>Course Applications</h3>
+              <p className="stat-number">...</p>
+            </div>
+            <div className="card">
+              <h3>Admissions</h3>
+              <p className="stat-number">...</p>
+            </div>
+            <div className="card">
+              <h3>Jobs Applied</h3>
+              <p className="stat-number">...</p>
+            </div>
+            <div className="card">
+              <h3>Qualified Courses</h3>
+              <p className="stat-number">...</p>
+            </div>
+          </div>
+
+          <div className="quick-actions stats-grid">
+            <div className="card quick-action-card">
+              <h3>Enter Your Grades</h3>
+              <p>Add your LGCSE results to see qualified courses</p>
+              <Link to="/student/grades" className="btn">Enter Grades</Link>
+            </div>
+            
+            <div className="card quick-action-card">
+              <h3>Apply for Courses</h3>
+              <p>Browse and apply to institutions</p>
+              <Link to="/student/courses" className="btn">View Courses</Link>
+            </div>
+            
+            <div className="card quick-action-card">
+              <h3>Check Admissions</h3>
+              <p>View your application status</p>
+              <Link to="/student/admissions" className="btn">View Status</Link>
+            </div>
+            
+            <div className="card quick-action-card">
+              <h3>Upload Transcript</h3>
+              <p>Add your academic transcripts</p>
+              <Link to="/student/transcript" className="btn">Upload</Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="student-home">
