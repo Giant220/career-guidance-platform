@@ -8,6 +8,7 @@ import CompanyDashboard from './components/company/CompanyDashboard';
 import AdminDashboard from './components/admin/AdminDashboard';
 import Login from './components/auth/Login';
 import Signup from './components/auth/Signup';
+import ForgotPassword from './components/auth/ForgotPassword';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -20,6 +21,7 @@ function App() {
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
             
             <Route path="/student/*" element={
               <ProtectedRoute role="student">
