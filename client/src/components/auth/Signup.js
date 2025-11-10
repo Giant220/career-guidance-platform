@@ -71,20 +71,7 @@ const Signup = () => {
 
       await signup(formData.email, formData.password, userData);
       
-      // Create user profile in database
-      await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          uid: '', // Will be set by backend using Firebase Admin
-          email: formData.email,
-          ...userData
-        })
-      });
-
-      alert('Account created successfully! Please check your email for verification.');
+      // Success message and navigation are handled in AuthContext
       navigate('/login');
     } catch (error) {
       setError('Failed to create account: ' + error.message);
