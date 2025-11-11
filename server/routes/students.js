@@ -3,6 +3,14 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const db = admin.firestore();
 
+// SIMPLE TEST ROUTE
+router.get('/test', (req, res) => {
+  res.json({ 
+    message: 'Student routes are working!', 
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Get student profile
 router.get('/:id/profile', async (req, res) => {
   try {
@@ -11,7 +19,6 @@ router.get('/:id/profile', async (req, res) => {
     if (studentDoc.exists) {
       res.json(studentDoc.data());
     } else {
-      // Create empty profile if doesn't exist
       const emptyProfile = {
         fullName: '',
         phone: '',
@@ -35,13 +42,11 @@ router.post('/profile', async (req, res) => {
   try {
     const { studentId, ...profileData } = req.body;
     
-    // Validate phone format
     const phoneRegex = /^\+266[0-9]{8}$/;
     if (!phoneRegex.test(profileData.phone)) {
       return res.status(400).json({ error: 'Invalid phone format. Must be +266 followed by 8 digits' });
     }
 
-    // Validate name (no numbers)
     const nameRegex = /^[A-Za-z\s]+$/;
     if (!nameRegex.test(profileData.fullName)) {
       return res.status(400).json({ error: 'Name can only contain letters and spaces' });
@@ -64,7 +69,6 @@ router.post('/grades', async (req, res) => {
   try {
     const { studentId, grades } = req.body;
     
-    // Convert grades to numerical values for comparison
     const gradeValues = {
       'A*': 6, 'A': 5, 'B': 4, 'C': 3, 'D': 2, 'E': 1, 'F': 0, 'Not Taken': -1
     };
@@ -87,7 +91,42 @@ router.post('/grades', async (req, res) => {
   }
 });
 
-// Get qualified courses for student
+// Get ALL courses for student (combines pre-populated and custom courses)
+router.get('/:id/all-courses', async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    const studentDoc = await db.collection('students').doc(studentId).get();
+    
+    if (!studentDoc.exists) {
+      return res.json([]);
+    }
+
+    const student = studentDoc.data();
+    
+    if (!student || !student.grades) {
+      return res.json([]);
+    }
+
+    const coursesSnapshot = await db.collection('courses').get();
+    const allCourses = [];
+
+    coursesSnapshot.forEach(doc => {
+      const course = { id: doc.id, ...doc.data() };
+      allCourses.push(course);
+    });
+
+    const qualifiedCourses = allCourses.filter(course => 
+      qualifiesForCourse(student.grades, course.requirements)
+    );
+    
+    res.json(qualifiedCourses);
+  } catch (error) {
+    console.error('Error fetching all courses:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get qualified courses for student (original endpoint)
 router.get('/:id/qualified-courses', async (req, res) => {
   try {
     const studentDoc = await db.collection('students').doc(req.params.id).get();
@@ -119,18 +158,61 @@ router.get('/:id/qualified-courses', async (req, res) => {
   }
 });
 
-// Helper function to check if student qualifies for course
+// CLEAN Helper function to check if student qualifies for course
 function qualifiesForCourse(studentGrades, requirements) {
   const gradeValues = {
     'A*': 6, 'A': 5, 'B': 4, 'C': 3, 'D': 2, 'E': 1, 'F': 0
   };
 
+  if (!requirements || requirements.length === 0) {
+    return true;
+  }
+
   for (const requirement of requirements) {
-    const match = requirement.match(/([A-Za-z\s]+)\s+([A-F\*])(?:\+)?/);
+    if (!requirement || typeof requirement !== 'string') {
+      continue;
+    }
+
+    let subject, minGrade;
+    
+    // Pattern 1: "Subject Grade" (e.g., "English C", "Mathematics B")
+    let match = requirement.match(/([A-Za-z\s]+)\s+([A-F\*])(?:\+)?/);
     if (match) {
-      const subject = match[1].trim();
-      const minGrade = match[2];
-      const studentGrade = studentGrades[subject] || -1;
+      subject = match[1].trim();
+      minGrade = match[2];
+    } 
+    // Pattern 2: "Grade in Subject" (e.g., "C in English", "B in Mathematics")
+    else {
+      match = requirement.match(/([A-F\*])\s+in\s+([A-Za-z\s]+)/i);
+      if (match) {
+        minGrade = match[1];
+        subject = match[2].trim();
+      }
+      // Pattern 3: Handle other formats or free text - be lenient with custom courses
+      else {
+        const commonSubjects = ['english', 'mathematics', 'math', 'science', 'biology', 'chemistry', 'physics', 'computer', 'accounting', 'commerce'];
+        const requirementLower = requirement.toLowerCase();
+        
+        const hasCommonSubject = commonSubjects.some(sub => 
+          requirementLower.includes(sub) && Object.keys(studentGrades).some(studentSub => 
+            studentSub.toLowerCase().includes(sub)
+          )
+        );
+        
+        if (hasCommonSubject) {
+          continue;
+        } else {
+          continue;
+        }
+      }
+    }
+
+    if (subject && minGrade) {
+      const studentSubjectKey = Object.keys(studentGrades).find(
+        key => key.toLowerCase().includes(subject.toLowerCase())
+      );
+      
+      const studentGrade = studentSubjectKey ? studentGrades[studentSubjectKey] : -1;
       const minGradeValue = gradeValues[minGrade] || 0;
 
       if (studentGrade < minGradeValue) {
@@ -188,13 +270,11 @@ router.post('/accept-admission', async (req, res) => {
   try {
     const { studentId, admissionId, institutionId } = req.body;
     
-    // Update the accepted admission
     await db.collection('applications').doc(admissionId).update({
       accepted: true,
       acceptanceDate: new Date().toISOString()
     });
 
-    // Reject other admissions from different institutions
     const otherAdmissions = await db.collection('applications')
       .where('studentId', '==', studentId)
       .where('institutionId', '!=', institutionId)
@@ -223,7 +303,6 @@ router.post('/upload-transcript', async (req, res) => {
   try {
     const transcriptData = req.body;
     
-    // Validate PDF data
     if (!transcriptData.fileName?.endsWith('.pdf')) {
       return res.status(400).json({ error: 'Only PDF files allowed' });
     }
@@ -268,10 +347,9 @@ router.delete('/transcripts/:id', async (req, res) => {
   }
 });
 
-// Get ALL jobs for student (no filtering - show everything)
+// Get ALL jobs for student
 router.get('/:id/jobs', async (req, res) => {
   try {
-    // Return all active jobs - let students see everything
     const snapshot = await db.collection('jobs')
       .where('status', '==', 'active')
       .orderBy('postedDate', 'desc')
@@ -294,7 +372,6 @@ router.get('/:studentId/jobs/:jobId/qualify', async (req, res) => {
   try {
     const { studentId, jobId } = req.params;
 
-    // Get job details
     const jobDoc = await db.collection('jobs').doc(jobId).get();
     if (!jobDoc.exists) {
       return res.json({ qualified: false, reason: 'Job not found' });
@@ -302,7 +379,6 @@ router.get('/:studentId/jobs/:jobId/qualify', async (req, res) => {
 
     const job = jobDoc.data();
 
-    // Get student transcripts
     const transcriptsSnapshot = await db.collection('student_transcripts')
       .where('studentId', '==', studentId)
       .get();
@@ -312,7 +388,6 @@ router.get('/:studentId/jobs/:jobId/qualify', async (req, res) => {
       transcripts.push(doc.data());
     });
 
-    // Check if student has uploaded any transcripts
     if (transcripts.length === 0) {
       return res.json({ 
         qualified: false, 
@@ -320,19 +395,15 @@ router.get('/:studentId/jobs/:jobId/qualify', async (req, res) => {
       });
     }
 
-    // Simple qualification check - in real system, this would be more sophisticated
-    // For now, we'll consider students qualified if they have relevant transcripts
     const hasRelevantEducation = transcripts.some(transcript => {
       const program = transcript.program?.toLowerCase() || '';
       const jobTitle = job.title?.toLowerCase() || '';
       const jobRequirements = job.requirements?.join(' ').toLowerCase() || '';
       
-      // Basic matching logic - can be improved
       return program.includes('computer') && jobTitle.includes('software') ||
              program.includes('business') && jobTitle.includes('business') ||
              program.includes('marketing') && jobTitle.includes('marketing') ||
              program.includes('accounting') && jobTitle.includes('accounting') ||
-             // Default to true if no specific match found
              true;
     });
 
@@ -355,7 +426,6 @@ router.post('/:studentId/jobs/:jobId/apply', async (req, res) => {
   try {
     const { studentId, jobId } = req.params;
 
-    // Check if already applied
     const existingApplication = await db.collection('jobApplications')
       .where('studentId', '==', studentId)
       .where('jobId', '==', jobId)
@@ -367,7 +437,6 @@ router.post('/:studentId/jobs/:jobId/apply', async (req, res) => {
       });
     }
 
-    // Check qualification
     const qualifyResponse = await fetch(`http://localhost:5000/api/students/${studentId}/jobs/${jobId}/qualify`);
     const qualifyData = await qualifyResponse.json();
 
@@ -377,14 +446,12 @@ router.post('/:studentId/jobs/:jobId/apply', async (req, res) => {
       });
     }
 
-    // Get job and student details
     const jobDoc = await db.collection('jobs').doc(jobId).get();
     const studentDoc = await db.collection('students').doc(studentId).get();
     
     const job = jobDoc.data();
     const student = studentDoc.exists ? studentDoc.data() : {};
 
-    // Create job application
     const applicationData = {
       studentId,
       jobId,
@@ -432,18 +499,16 @@ router.get('/:id/job-applications', async (req, res) => {
   }
 });
 
-// Get student stats - REAL DATA
+// Get student stats
 router.get('/:id/stats', async (req, res) => {
   try {
     const studentId = req.params.id;
 
-    // Get REAL course applications count
     const applicationsSnapshot = await db.collection('applications')
       .where('studentId', '==', studentId)
       .get();
     const applications = applicationsSnapshot.size;
 
-    // Get REAL admissions count (applications with admitted status)
     let admissions = 0;
     applicationsSnapshot.forEach(doc => {
       if (doc.data().status === 'admitted') {
@@ -451,13 +516,11 @@ router.get('/:id/stats', async (req, res) => {
       }
     });
 
-    // Get REAL job applications count
     const jobsSnapshot = await db.collection('jobApplications')
       .where('studentId', '==', studentId)
       .get();
     const jobsApplied = jobsSnapshot.size;
 
-    // Get REAL qualified courses count
     const studentDoc = await db.collection('students').doc(studentId).get();
     const student = studentDoc.exists ? studentDoc.data() : {};
     
@@ -480,7 +543,6 @@ router.get('/:id/stats', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching student stats:', error);
-    // Return zeros if there's an error - won't break anything
     res.json({
       applications: 0,
       admissions: 0, 
