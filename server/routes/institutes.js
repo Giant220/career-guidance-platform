@@ -150,15 +150,20 @@ router.get('/:id/faculties', async (req, res) => {
   }
 });
 
-// Add new course
+// Add new course - FIXED VERSION
 router.post('/courses', async (req, res) => {
   try {
     const courseData = req.body;
     const courseId = `custom-${Date.now()}`;
 
+    // Get institute name to include in course data
+    const instituteDoc = await db.collection('institutes').doc(courseData.institutionId).get();
+    const institute = instituteDoc.exists ? instituteDoc.data() : {};
+
     await db.collection('courses').doc(courseId).set({
       ...courseData,
       id: courseId,
+      institutionName: institute.name || 'Custom Institute', // CRITICAL: Add institutionName
       status: 'active',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -171,14 +176,20 @@ router.post('/courses', async (req, res) => {
   }
 });
 
-// Update course
+// Update course - FIXED VERSION
 router.put('/courses/:courseId', async (req, res) => {
   try {
     const courseId = req.params.courseId;
     const courseData = req.body;
 
+    // Ensure institutionName is preserved
+    const existingCourse = await db.collection('courses').doc(courseId).get();
+    const currentData = existingCourse.exists ? existingCourse.data() : {};
+
     await db.collection('courses').doc(courseId).set({
+      ...currentData,
       ...courseData,
+      institutionName: currentData.institutionName, // Preserve existing institutionName
       updatedAt: new Date().toISOString()
     }, { merge: true });
 
