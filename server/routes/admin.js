@@ -1,336 +1,257 @@
-const express = require('express');
-const router = express.Router();
-const admin = require('firebase-admin');
-const db = admin.firestore();
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import ManageUsers from './ManageUsers';
+import ManageInstitutions from './ManageInstitutions';
+import ManageCompanies from './ManageCompanies';
+import SystemReports from './SystemReports';
+import SystemSettings from './SystemSettings';
+import './AdminDashboard.css';
 
-// Get admin profile
-router.get('/profile/:id', async (req, res) => {
-  try {
-    const adminDoc = await db.collection('users').doc(req.params.id).get();
-    
-    if (adminDoc.exists) {
-      res.json({ id: adminDoc.id, ...adminDoc.data() });
-    } else {
-      res.status(404).json({ error: 'Admin not found' });
+const AdminDashboard = () => {
+  const { currentUser, logout } = useAuth();
+  const [admin, setAdmin] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchAdminData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser]);
+
+  const fetchAdminData = async () => {
+    try {
+      // guard: don't fetch until we have a uid
+      if (!currentUser?.uid) return;
+
+      const response = await fetch(`/api/admin/profile/${currentUser.uid}`);
+      const data = await response.json();
+      setAdmin(data);
+    } catch (error) {
+      console.error('Error fetching admin data:', error);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error('Error fetching admin profile:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+  };
 
-// Get system stats
-router.get('/stats', async (req, res) => {
-  try {
-    // Get user counts
-    const usersSnapshot = await db.collection('users').get();
-    const institutionsSnapshot = await db.collection('institutions').get();
-    const companiesSnapshot = await db.collection('companies').get();
-    const applicationsSnapshot = await db.collection('applications').get();
-
-    const pendingInstitutions = institutionsSnapshot.docs.filter(doc => 
-      doc.data().status === 'pending'
-    ).length;
-
-    const pendingCompanies = companiesSnapshot.docs.filter(doc => 
-      doc.data().status === 'pending'
-    ).length;
-
-    const pendingApprovals = pendingInstitutions + pendingCompanies;
-
-    res.json({
-      totalUsers: usersSnapshot.size,
-      totalInstitutions: institutionsSnapshot.size,
-      totalCompanies: companiesSnapshot.size,
-      pendingApprovals: pendingApprovals,
-      activeApplications: applicationsSnapshot.size,
-      systemHealth: 100
-    });
-  } catch (error) {
-    console.error('Error fetching system stats:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get recent activity
-router.get('/activity', async (req, res) => {
-  try {
-    // Get recent users (real data)
-    const usersSnapshot = await db.collection('users')
-      .orderBy('createdAt', 'desc')
-      .limit(5)
-      .get();
-    
-    const recentActivity = [];
-
-    usersSnapshot.forEach(doc => {
-      const user = doc.data();
-      recentActivity.push({
-        type: 'user',
-        message: `New ${user.role} registered: ${user.fullName}`,
-        user: user.email,
-        timestamp: user.createdAt
-      });
-    });
-
-    // Get recent institutions (real data)
-    const institutionsSnapshot = await db.collection('institutions')
-      .orderBy('createdAt', 'desc')
-      .limit(3)
-      .get();
-
-    institutionsSnapshot.forEach(doc => {
-      const institution = doc.data();
-      recentActivity.push({
-        type: 'institution',
-        message: `New institution: ${institution.name}`,
-        user: institution.email,
-        timestamp: institution.createdAt
-      });
-    });
-
-    // Sort by timestamp
-    recentActivity.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    
-    // Limit to 8 items
-    const finalActivity = recentActivity.slice(0, 8);
-
-    res.json(finalActivity);
-  } catch (error) {
-    console.error('Error fetching recent activity:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get pending institutions for approval
-router.get('/institutions/pending', async (req, res) => {
-  try {
-    const snapshot = await db.collection('institutions')
-      .where('status', '==', 'pending')
-      .get();
-    
-    const pendingInstitutions = [];
-    snapshot.forEach(doc => {
-      pendingInstitutions.push({
-        id: doc.id,
-        ...doc.data()
-      });
-    });
-
-    res.json(pendingInstitutions);
-  } catch (error) {
-    console.error('Error fetching pending institutions:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get pending companies for approval
-router.get('/companies/pending', async (req, res) => {
-  try {
-    const snapshot = await db.collection('companies')
-      .where('status', '==', 'pending')
-      .get();
-    
-    const pendingCompanies = [];
-    snapshot.forEach(doc => {
-      pendingCompanies.push({
-        id: doc.id,
-        ...doc.data()
-      });
-    });
-
-    res.json(pendingCompanies);
-  } catch (error) {
-    console.error('Error fetching pending companies:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get all users
-router.get('/users', async (req, res) => {
-  try {
-    const snapshot = await db.collection('users').get();
-    const users = [];
-    
-    snapshot.forEach(doc => {
-      users.push({ id: doc.id, ...doc.data() });
-    });
-
-    res.json(users);
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Update user status
-router.put('/users/:userId/status', async (req, res) => {
-  try {
-    const { status } = req.body;
-
-    await db.collection('users').doc(req.params.userId).update({
-      status,
-      updatedAt: new Date().toISOString()
-    });
-
-    res.json({ success: true, message: 'User status updated successfully' });
-  } catch (error) {
-    console.error('Error updating user status:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Update user role
-router.put('/users/:userId/role', async (req, res) => {
-  try {
-    const { role } = req.body;
-
-    await db.collection('users').doc(req.params.userId).update({
-      role,
-      updatedAt: new Date().toISOString()
-    });
-
-    res.json({ success: true, message: 'User role updated successfully' });
-  } catch (error) {
-    console.error('Error updating user role:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Delete user
-router.delete('/users/:userId', async (req, res) => {
-  try {
-    await db.collection('users').doc(req.params.userId).delete();
-    res.json({ success: true, message: 'User deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting user:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get all institutions
-router.get('/institutions', async (req, res) => {
-  try {
-    const snapshot = await db.collection('institutions').get();
-    const institutions = [];
-    
-    for (const doc of snapshot.docs) {
-      const institution = doc.data();
-      
-      // Get course count
-      const coursesSnapshot = await db.collection('courses')
-        .where('institutionId', '==', doc.id)
-        .get();
-
-      // Get application count
-      const applicationsSnapshot = await db.collection('applications')
-        .where('institutionId', '==', doc.id)
-        .get();
-
-      institutions.push({
-        id: doc.id,
-        ...institution,
-        courseCount: coursesSnapshot.size,
-        applicationCount: applicationsSnapshot.size,
-        studentCount: new Set(applicationsSnapshot.docs.map(d => d.data().studentId)).size
-      });
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/');
+    } catch (error) {
+      console.error('Failed to logout:', error);
     }
+  };
 
-    res.json(institutions);
-  } catch (error) {
-    console.error('Error fetching institutions:', error);
-    res.status(500).json({ error: error.message });
+  if (loading) {
+    return <div className="loading">Loading admin dashboard...</div>;
   }
-});
 
-// Update institution status
-router.put('/institutions/:institutionId/status', async (req, res) => {
-  try {
-    const { status } = req.body;
+  return (
+    <div className="admin-dashboard">
+      <nav className="navbar">
+        <div className="logo-area">
+          <div className="logo" style={{ backgroundColor: '#ffda77', opacity: 0 }}></div>
+          <span className="brand">Admin Portal</span>
+        </div>
+        <div className="nav-links">
+          <Link to="/admin">Dashboard</Link>
+          <Link to="/admin/users">Users</Link>
+          <Link to="/admin/institutions">Institutions</Link>
+          <Link to="/admin/companies">Companies</Link>
+          <Link to="/admin/reports">Reports</Link>
+          <Link to="/admin/settings">Settings</Link>
+          <button onClick={handleLogout} className="btn btn-secondary">Logout</button>
+        </div>
+      </nav>
 
-    await db.collection('institutions').doc(req.params.institutionId).update({
-      status,
-      updatedAt: new Date().toISOString()
-    });
+      <div className="main-content">
+        <Routes>
+          {/* Use index route so "/admin" correctly renders AdminHome */}
+          <Route index element={<AdminHome admin={admin} />} />
+          <Route path="users" element={<ManageUsers />} />
+          <Route path="institutions" element={<ManageInstitutions />} />
+          <Route path="companies" element={<ManageCompanies />} />
+          <Route path="reports" element={<SystemReports />} />
+          <Route path="settings" element={<SystemSettings />} />
+        </Routes>
+      </div>
+    </div>
+  );
+};
 
-    res.json({ success: true, message: 'Institution status updated successfully' });
-  } catch (error) {
-    console.error('Error updating institution status:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+const AdminHome = ({ admin }) => {
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalInstitutions: 0,
+    totalCompanies: 0,
+    pendingApprovals: 0,
+    activeApplications: 0,
+    systemHealth: 100
+  });
 
-// Delete institution
-router.delete('/institutions/:institutionId', async (req, res) => {
-  try {
-    await db.collection('institutions').doc(req.params.institutionId).delete();
-    res.json({ success: true, message: 'Institution deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting institution:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+  const [recentActivity, setRecentActivity] = useState([]);
 
-// Get all companies
-router.get('/companies', async (req, res) => {
-  try {
-    const snapshot = await db.collection('companies').get();
-    const companies = [];
-    
-    for (const doc of snapshot.docs) {
-      const company = doc.data();
-      
-      // Get job count
-      const jobsSnapshot = await db.collection('jobs')
-        .where('companyId', '==', doc.id)
-        .get();
+  useEffect(() => {
+    fetchSystemStats();
+    fetchRecentActivity();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-      // Get application count
-      const applicationsSnapshot = await db.collection('jobApplications')
-        .where('companyId', '==', doc.id)
-        .get();
-
-      companies.push({
-        id: doc.id,
-        ...company,
-        jobCount: jobsSnapshot.size,
-        applicationCount: applicationsSnapshot.size
-      });
+  const fetchSystemStats = async () => {
+    try {
+      const response = await fetch('/api/admin/stats');
+      const data = await response.json();
+      setStats(data);
+    } catch (error) {
+      console.error('Error fetching system stats:', error);
     }
+  };
 
-    res.json(companies);
-  } catch (error) {
-    console.error('Error fetching companies:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+  const fetchRecentActivity = async () => {
+    try {
+      const response = await fetch('/api/admin/activity');
+      const data = await response.json();
+      setRecentActivity(data);
+    } catch (error) {
+      console.error('Error fetching recent activity:', error);
+    }
+  };
 
-// Update company status
-router.put('/companies/:companyId/status', async (req, res) => {
-  try {
-    const { status } = req.body;
+  return (
+    <div className="admin-home">
+      <div className="section">
+        <div className="admin-header">
+          <h1>System Administration</h1>
+          <p>Welcome back, {admin?.fullName || 'Administrator'}. Manage the Career Bridge platform.</p>
+        </div>
 
-    await db.collection('companies').doc(req.params.companyId).update({
-      status,
-      updatedAt: new Date().toISOString()
-    });
+        <div className="dashboard-top">
+          <div className="card">
+            <h3>Total Users</h3>
+            <p className="stat-number">{stats.totalUsers}</p>
+            <small>Registered users</small>
+          </div>
+          <div className="card">
+            <h3>Institutions</h3>
+            <p className="stat-number">{stats.totalInstitutions}</p>
+            <small>Education partners</small>
+          </div>
+          <div className="card">
+            <h3>Companies</h3>
+            <p className="stat-number">{stats.totalCompanies}</p>
+            <small>Employment partners</small>
+          </div>
+          <div className="card">
+            <h3>Pending Approvals</h3>
+            <p className="stat-number">{stats.pendingApprovals}</p>
+            <small>Require action</small>
+          </div>
+        </div>
 
-    res.json({ success: true, message: 'Company status updated successfully' });
-  } catch (error) {
-    console.error('Error updating company status:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+        <div className="dashboard-top">
+          <div className="card">
+            <h3>Active Applications</h3>
+            <p className="stat-number">{stats.activeApplications}</p>
+            <small>Course applications</small>
+          </div>
+          <div className="card">
+            <h3>System Health</h3>
+            <p className="stat-number">{stats.systemHealth}%</p>
+            <small>Platform status</small>
+          </div>
+          <div className="card">
+            <h3>Database Size</h3>
+            <p className="stat-number">2.4GB</p>
+            <small>Storage used</small>
+          </div>
+          <div className="card">
+            <h3>Uptime</h3>
+            <p className="stat-number">99.9%</p>
+            <small>This month</small>
+          </div>
+        </div>
 
-// Delete company
-router.delete('/companies/:companyId', async (req, res) => {
-  try {
-    await db.collection('companies').doc(req.params.companyId).delete();
-    res.json({ success: true, message: 'Company deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting company:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+        <div className="quick-actions stats-grid">
+          <div className="card quick-action-card">
+            <h3>Manage Users</h3>
+            <p>View and manage all system users</p>
+            <Link to="/admin/users" className="btn">Manage Users</Link>
+          </div>
 
-module.exports = router;
+          <div className="card quick-action-card">
+            <h3>Approve Institutions</h3>
+            <p>Review institution registrations</p>
+            <Link to="/admin/institutions" className="btn">Manage Institutions</Link>
+          </div>
+
+          <div className="card quick-action-card">
+            <h3>Approve Companies</h3>
+            <p>Review company registrations</p>
+            <Link to="/admin/companies" className="btn">Manage Companies</Link>
+          </div>
+
+          <div className="card quick-action-card">
+            <h3>System Reports</h3>
+            <p>View platform analytics</p>
+            <Link to="/admin/reports" className="btn">View Reports</Link>
+          </div>
+        </div>
+
+        <div className="section">
+          <h3>Recent System Activity</h3>
+          <div className="activity-list">
+            {recentActivity.map((activity, index) => (
+              <div key={index} className="activity-item">
+                <div className="activity-icon">
+                  {/* icons removed as requested */}
+                </div>
+                <div className="activity-content">
+                  <p>{activity.message}</p>
+                  <small>{new Date(activity.timestamp).toLocaleString()}</small>
+                </div>
+                <div className="activity-user">
+                  {activity.user}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {recentActivity.length === 0 && (
+            <div className="text-center">
+              <p>No recent activity.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="section">
+          <h3>Quick System Checks</h3>
+          <div className="system-checks">
+            <div className="check-item success">
+              <span className="check-icon" /> 
+              <span>Database Connection</span>
+            </div>
+            <div className="check-item success">
+              <span className="check-icon" /> 
+              <span>Authentication Service</span>
+            </div>
+            <div className="check-item success">
+              <span className="check-icon" /> 
+              <span>File Storage</span>
+            </div>
+            <div className="check-item success">
+              <span className="check-icon" /> 
+              <span>Email Service</span>
+            </div>
+            <div className="check-item warning">
+              <span className="check-icon" /> 
+              <span>Backup Status (Due today)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AdminDashboard;
