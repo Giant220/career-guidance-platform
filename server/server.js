@@ -5,8 +5,69 @@ const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 require('dotenv').config();
 
-// Initialize Firebase Admin
-const admin = require('./config/firebase');
+// Initialize Firebase Admin WITH ERROR HANDLING
+let admin;
+let db;
+
+try {
+  console.log('🔄 Initializing Firebase Admin...');
+  admin = require('./config/firebase');
+  db = admin.firestore();
+  console.log('✅ Firebase Admin initialized successfully');
+  
+  // Test Firebase connection
+  db.collection('test').doc('connection').get()
+    .then(() => console.log('✅ Firebase connection test passed'))
+    .catch(err => console.error('❌ Firebase connection test failed:', err));
+    
+} catch (error) {
+  console.error('💥 CRITICAL: Firebase Admin initialization failed:', error);
+  console.error('This will break all database operations!');
+  
+  // Create mock db to prevent crashes but log all errors
+  db = {
+    collection: (name) => ({
+      doc: (id) => ({
+        get: () => {
+          console.error(`❌ Firebase not initialized - attempted to get doc: ${name}/${id}`);
+          return Promise.reject(new Error('Firebase not initialized'));
+        },
+        set: (data) => {
+          console.error(`❌ Firebase not initialized - attempted to set doc: ${name}/${id}`);
+          return Promise.reject(new Error('Firebase not initialized'));
+        },
+        update: (data) => {
+          console.error(`❌ Firebase not initialized - attempted to update doc: ${name}/${id}`);
+          return Promise.reject(new Error('Firebase not initialized'));
+        },
+        delete: () => {
+          console.error(`❌ Firebase not initialized - attempted to delete doc: ${name}/${id}`);
+          return Promise.reject(new Error('Firebase not initialized'));
+        }
+      }),
+      where: () => ({
+        get: () => {
+          console.error(`❌ Firebase not initialized - attempted to query collection: ${name}`);
+          return Promise.reject(new Error('Firebase not initialized'));
+        },
+        orderBy: () => ({
+          get: () => {
+            console.error(`❌ Firebase not initialized - attempted to query collection: ${name}`);
+            return Promise.reject(new Error('Firebase not initialized'));
+          }
+        })
+      }),
+      get: () => {
+        console.error(`❌ Firebase not initialized - attempted to get collection: ${name}`);
+        return Promise.reject(new Error('Firebase not initialized'));
+      },
+      add: (data) => {
+        console.error(`❌ Firebase not initialized - attempted to add to collection: ${name}`);
+        return Promise.reject(new Error('Firebase not initialized'));
+      }
+    })
+  };
+}
 
 const app = express();
 
@@ -45,6 +106,12 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Make db available to all routes
+app.use((req, res, next) => {
+  req.db = db;
+  next();
+});
+
 // Serve static files from React build
 app.use(express.static(path.join(__dirname, '../client/build')));
 
@@ -62,7 +129,8 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV 
+    environment: process.env.NODE_ENV,
+    firebase: db ? 'Firebase connected' : 'Firebase failed'
   });
 });
 
