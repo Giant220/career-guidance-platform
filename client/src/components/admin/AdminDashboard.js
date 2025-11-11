@@ -16,15 +16,17 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     fetchAdminData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
   const fetchAdminData = async () => {
     try {
-      if (currentUser) {
-        const response = await fetch(`/api/admin/profile/${currentUser.uid}`);
-        const data = await response.json();
-        setAdmin(data);
-      }
+      // guard: don't fetch until we have a uid
+      if (!currentUser?.uid) return;
+
+      const response = await fetch(`/api/admin/profile/${currentUser.uid}`);
+      const data = await response.json();
+      setAdmin(data);
     } catch (error) {
       console.error('Error fetching admin data:', error);
     } finally {
@@ -49,11 +51,11 @@ const AdminDashboard = () => {
     <div className="admin-dashboard">
       <nav className="navbar">
         <div className="logo-area">
-          <div className="logo" style={{ backgroundColor: '#ffda77',opacity:0 }}></div>
+          <div className="logo" style={{ backgroundColor: '#ffda77', opacity: 0 }}></div>
           <span className="brand">Admin Portal</span>
         </div>
         <div className="nav-links">
-          <Link to="/admin" onClick={() => window.location.reload()}>Dashboard</Link>
+          <Link to="/admin">Dashboard</Link>
           <Link to="/admin/users">Users</Link>
           <Link to="/admin/institutions">Institutions</Link>
           <Link to="/admin/companies">Companies</Link>
@@ -65,12 +67,13 @@ const AdminDashboard = () => {
 
       <div className="main-content">
         <Routes>
-          <Route path="/" element={<AdminHome admin={admin} />} />
-          <Route path="/users" element={<ManageUsers />} />
-          <Route path="/institutions" element={<ManageInstitutions />} />
-          <Route path="/companies" element={<ManageCompanies />} />
-          <Route path="/reports" element={<SystemReports />} />
-          <Route path="/settings" element={<SystemSettings />} />
+          {/* Use index route so "/admin" correctly renders AdminHome */}
+          <Route index element={<AdminHome admin={admin} />} />
+          <Route path="users" element={<ManageUsers />} />
+          <Route path="institutions" element={<ManageInstitutions />} />
+          <Route path="companies" element={<ManageCompanies />} />
+          <Route path="reports" element={<SystemReports />} />
+          <Route path="settings" element={<SystemSettings />} />
         </Routes>
       </div>
     </div>
@@ -92,6 +95,7 @@ const AdminHome = ({ admin }) => {
   useEffect(() => {
     fetchSystemStats();
     fetchRecentActivity();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchSystemStats = async () => {
@@ -174,19 +178,19 @@ const AdminHome = ({ admin }) => {
             <p>View and manage all system users</p>
             <Link to="/admin/users" className="btn">Manage Users</Link>
           </div>
-          
+
           <div className="card quick-action-card">
             <h3>Approve Institutions</h3>
             <p>Review institution registrations</p>
             <Link to="/admin/institutions" className="btn">Manage Institutions</Link>
           </div>
-          
+
           <div className="card quick-action-card">
             <h3>Approve Companies</h3>
             <p>Review company registrations</p>
             <Link to="/admin/companies" className="btn">Manage Companies</Link>
           </div>
-          
+
           <div className="card quick-action-card">
             <h3>System Reports</h3>
             <p>View platform analytics</p>
@@ -200,7 +204,7 @@ const AdminHome = ({ admin }) => {
             {recentActivity.map((activity, index) => (
               <div key={index} className="activity-item">
                 <div className="activity-icon">
-                  {getActivityIcon(activity.type)}
+                  {/* icons removed as requested */}
                 </div>
                 <div className="activity-content">
                   <p>{activity.message}</p>
@@ -224,23 +228,23 @@ const AdminHome = ({ admin }) => {
           <h3>Quick System Checks</h3>
           <div className="system-checks">
             <div className="check-item success">
-              <span className="check-icon">✅</span>
+              <span className="check-icon" /> 
               <span>Database Connection</span>
             </div>
             <div className="check-item success">
-              <span className="check-icon">✅</span>
+              <span className="check-icon" /> 
               <span>Authentication Service</span>
             </div>
             <div className="check-item success">
-              <span className="check-icon">✅</span>
+              <span className="check-icon" /> 
               <span>File Storage</span>
             </div>
             <div className="check-item success">
-              <span className="check-icon">✅</span>
+              <span className="check-icon" /> 
               <span>Email Service</span>
             </div>
             <div className="check-item warning">
-              <span className="check-icon">⚠️</span>
+              <span className="check-icon" /> 
               <span>Backup Status (Due today)</span>
             </div>
           </div>
@@ -248,18 +252,6 @@ const AdminHome = ({ admin }) => {
       </div>
     </div>
   );
-};
-
-const getActivityIcon = (type) => {
-  const icons = {
-    user: '👤',
-    institution: '🏫',
-    company: '💼',
-    application: '📝',
-    system: '⚙️',
-    security: '🔒'
-  };
-  return icons[type] || '📌';
 };
 
 export default AdminDashboard;
