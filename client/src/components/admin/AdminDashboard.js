@@ -15,15 +15,13 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchAdminData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (currentUser) {
+      fetchAdminData();
+    }
   }, [currentUser]);
 
   const fetchAdminData = async () => {
     try {
-      // guard: don't fetch until we have a uid
-      if (!currentUser?.uid) return;
-
       const response = await fetch(`/api/admin/profile/${currentUser.uid}`);
       const data = await response.json();
       setAdmin(data);
@@ -67,7 +65,6 @@ const AdminDashboard = () => {
 
       <div className="main-content">
         <Routes>
-          {/* Use index route so "/admin" correctly renders AdminHome */}
           <Route index element={<AdminHome admin={admin} />} />
           <Route path="users" element={<ManageUsers />} />
           <Route path="institutions" element={<ManageInstitutions />} />
@@ -95,7 +92,6 @@ const AdminHome = ({ admin }) => {
   useEffect(() => {
     fetchSystemStats();
     fetchRecentActivity();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchSystemStats = async () => {
@@ -203,9 +199,6 @@ const AdminHome = ({ admin }) => {
           <div className="activity-list">
             {recentActivity.map((activity, index) => (
               <div key={index} className="activity-item">
-                <div className="activity-icon">
-                  {/* icons removed as requested */}
-                </div>
                 <div className="activity-content">
                   <p>{activity.message}</p>
                   <small>{new Date(activity.timestamp).toLocaleString()}</small>
@@ -228,24 +221,19 @@ const AdminHome = ({ admin }) => {
           <h3>Quick System Checks</h3>
           <div className="system-checks">
             <div className="check-item success">
-              <span className="check-icon" /> 
-              <span>Database Connection</span>
+              <span>Database Connection ✅</span>
             </div>
             <div className="check-item success">
-              <span className="check-icon" /> 
-              <span>Authentication Service</span>
+              <span>Authentication Service ✅</span>
             </div>
             <div className="check-item success">
-              <span className="check-icon" /> 
-              <span>File Storage</span>
+              <span>File Storage ✅</span>
             </div>
             <div className="check-item success">
-              <span className="check-icon" /> 
-              <span>Email Service</span>
+              <span>Email Service ✅</span>
             </div>
             <div className="check-item warning">
-              <span className="check-icon" /> 
-              <span>Backup Status (Due today)</span>
+              <span>Backup Status (Due today) ⚠️</span>
             </div>
           </div>
         </div>
