@@ -47,10 +47,10 @@ const Landing = () => {
           </div>
 
           <div className="card">
-            <h3>Administration</h3>
-            <p>System management</p>
+            <h3>Already Registered?</h3>
+            <p>Access your account</p>
             <Link to="/login" className="btn" style={{ marginTop: '1rem' }}>
-              Admin Login
+              Login Here
             </Link>
           </div>
         </div>
