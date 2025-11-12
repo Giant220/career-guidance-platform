@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 
-const InstituteProfile = ({ institute, onUpdate }) => {
+const InstituteProfile = ({ institute, onInstituteUpdate }) => {
   const { currentUser } = useAuth();
   const [profile, setProfile] = useState({
     name: '',
@@ -20,8 +20,13 @@ const InstituteProfile = ({ institute, onUpdate }) => {
   useEffect(() => {
     if (institute) {
       setProfile(institute);
+    } else if (currentUser?.email) {
+      setProfile(prev => ({
+        ...prev,
+        email: currentUser.email
+      }));
     }
-  }, [institute]);
+  }, [institute, currentUser]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -64,7 +69,6 @@ const InstituteProfile = ({ institute, onUpdate }) => {
       let response;
       
       if (institute) {
-        // Update existing institute
         response = await fetch(`/api/institutes/${institute.id}`, {
           method: 'PUT',
           headers: {
@@ -76,7 +80,6 @@ const InstituteProfile = ({ institute, onUpdate }) => {
           })
         });
       } else {
-        // Create new institute
         response = await fetch('/api/institutes', {
           method: 'POST',
           headers: {
@@ -93,7 +96,14 @@ const InstituteProfile = ({ institute, onUpdate }) => {
         const result = await response.json();
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
-        onUpdate(result); // Pass the created/updated institute data
+        
+        if (onInstituteUpdate) {
+          if (institute) {
+            onInstituteUpdate({ ...institute, ...profile });
+          } else {
+            onInstituteUpdate({ id: result.id, ...profile, userId: currentUser.uid, status: 'pending' });
+          }
+        }
       } else {
         throw new Error('Failed to save profile');
       }
