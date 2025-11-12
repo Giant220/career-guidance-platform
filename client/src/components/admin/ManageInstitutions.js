@@ -65,7 +65,7 @@ const ManageInstitutions = () => {
     }));
   };
 
-  // FIXED: Use the new approve endpoint
+  // Approve institution
   const handleApprove = async (institutionId) => {
     try {
       setActionLoading(institutionId);
@@ -97,7 +97,7 @@ const ManageInstitutions = () => {
               : inst
           )
         );
-        alert('Institute approved successfully! Students can now see its courses.');
+        alert(`Institute approved successfully! ${result.approvedCourses} courses are now visible to students.`);
       }
     } catch (error) {
       console.error('Error approving institute:', error);
@@ -107,7 +107,7 @@ const ManageInstitutions = () => {
     }
   };
 
-  // FIXED: Use the new reject endpoint
+  // Reject institution
   const handleReject = async (institutionId) => {
     const reason = prompt('Please enter a reason for rejection:');
     if (!reason) return;
@@ -146,7 +146,7 @@ const ManageInstitutions = () => {
               : inst
           )
         );
-        alert('Institute rejected successfully!');
+        alert(`Institute rejected successfully! ${result.rejectedCourses} courses are now hidden.`);
       }
     } catch (error) {
       console.error('Error rejecting institute:', error);
@@ -156,7 +156,7 @@ const ManageInstitutions = () => {
     }
   };
 
-  // For suspend/reactivate (keep existing status endpoint)
+  // For suspend/reactivate
   const handleStatusUpdate = async (institutionId, newStatus) => {
     try {
       setActionLoading(institutionId);
@@ -282,7 +282,7 @@ Applications: ${institution.applicationCount || 0}
         </div>
         <div className="card">
           <h3>Pending Approval</h3>
-          <p className="stat-number">{statusStats.pending}</p>
+          <p className="stat-number pending-count">{statusStats.pending}</p>
         </div>
         <div className="card">
           <h3>Rejected</h3>
@@ -337,12 +337,13 @@ Applications: ${institution.applicationCount || 0}
 
         <div className="institutions-list">
           {filteredInstitutions.map(institution => (
-            <div key={institution.id} className="institution-card">
+            <div key={institution.id} className={`institution-card status-${institution.status}`}>
               <div className="institution-info">
                 <div className="institution-header">
                   <h3>{institution.name || 'Unnamed Institute'}</h3>
                   <span className={`status-badge status-${institution.status}`}>
                     {institution.status}
+                    {institution.status === 'pending' && ''}
                   </span>
                 </div>
                 <p className="institution-meta">{institution.type || 'N/A'} • {institution.location || 'N/A'}</p>
@@ -360,6 +361,11 @@ Applications: ${institution.applicationCount || 0}
                 {institution.rejectionReason && (
                   <div className="rejection-reason">
                     <strong>Rejection Reason:</strong> {institution.rejectionReason}
+                  </div>
+                )}
+                {institution.status === 'pending' && (
+                  <div className="pending-notice">
+                    <strong>Attention Needed:</strong> This institution is waiting for approval
                   </div>
                 )}
               </div>
@@ -443,7 +449,10 @@ Applications: ${institution.applicationCount || 0}
       {/* Pending Approvals Section */}
       {statusStats.pending > 0 && (
         <div className="section pending-section">
-          <h3>Pending Approvals ({statusStats.pending})</h3>
+          <div className="section-header">
+            <h3>Pending Approvals ({statusStats.pending})</h3>
+            <p className="section-subtitle">These institutions are waiting for your approval</p>
+          </div>
           <div className="pending-approvals">
             {institutions
               .filter(inst => inst.status === 'pending')
