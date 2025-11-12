@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import CompanyProfile from './CompanyProfile';
-import ManageJobs from './ManageJobs';
+import PostJobs from './PostJobs';
 import ViewApplications from './ViewApplications';
 import CandidateManagement from './CandidateManagement';
 import CompanyReports from './CompanyReports';
