@@ -1,6 +1,22 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+
+const ComponentWrapper = ({ institute, children }) => {
+  if (!institute) {
+    return (
+      <div className="section">
+        <div className="error-message">
+          <h3>Institute Profile Required</h3>
+          <p>Please set up your institute profile first to access this feature.</p>
+        </div>
+      </div>
+    );
+  }
+  return children;
+};
 
 const AdmissionsManagement = ({ institute }) => {
+  const { currentUser } = useAuth();
   const [admittedStudents, setAdmittedStudents] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -12,9 +28,16 @@ const AdmissionsManagement = ({ institute }) => {
 
   const fetchAdmittedStudents = async () => {
     try {
-      const response = await fetch(`/api/institutes/${institute.id}/admissions`);
-      const data = await response.json();
-      setAdmittedStudents(data);
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/applications?instituteId=${institute.id}&status=admitted`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAdmittedStudents(data);
+      }
     } catch (error) {
       console.error('Error fetching admissions:', error);
     } finally {
@@ -24,10 +47,12 @@ const AdmissionsManagement = ({ institute }) => {
 
   const handleAcceptance = async (studentId, courseId, accept) => {
     try {
-      const response = await fetch('/api/institutes/admissions/acceptance', {
+      const token = await currentUser.getIdToken();
+      const response = await fetch('/api/applications/acceptance', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           studentId,
@@ -48,7 +73,6 @@ const AdmissionsManagement = ({ institute }) => {
   };
 
   const generateAdmissionLetter = (student) => {
-    // This would generate a PDF in a real implementation
     const letterContent = `
       ADMISSION LETTER
       
@@ -58,11 +82,9 @@ const AdmissionsManagement = ({ institute }) => {
       ${student.courseName} program at ${institute.name}.
       
       Program: ${student.courseName}
-      Duration: ${student.duration}
-      Fees: ${student.fees}
       Start Date: ${student.intake || 'Next Academic Year'}
       
-      Please confirm your acceptance by [Date].
+      Please confirm your acceptance within 14 days.
       
       Congratulations!
       
@@ -82,112 +104,123 @@ const AdmissionsManagement = ({ institute }) => {
   const pendingConfirmations = admittedStudents.filter(s => !s.accepted && s.status === 'admitted');
 
   return (
-    <div className="section">
-      <h1>Admissions Management</h1>
-      <p>Manage admitted students and track acceptances</p>
-
-      <div className="dashboard-top">
-        <div className="card">
-          <h3>Total Admitted</h3>
-          <p className="stat-number">{admittedStudents.length}</p>
-        </div>
-        <div className="card">
-          <h3>Confirmed</h3>
-          <p className="stat-number">{confirmedStudents.length}</p>
-        </div>
-        <div className="card">
-          <h3>Pending Confirmation</h3>
-          <p className="stat-number">{pendingConfirmations.length}</p>
-        </div>
-        <div className="card">
-          <h3>Acceptance Rate</h3>
-          <p className="stat-number">
-            {admittedStudents.length > 0 
-              ? Math.round((confirmedStudents.length / admittedStudents.length) * 100)
-              : 0
-            }%
-          </p>
-        </div>
-      </div>
-
+    <ComponentWrapper institute={institute}>
       <div className="section">
-        <h3>Pending Student Confirmations ({pendingConfirmations.length})</h3>
-        <div className="admissions-list">
-          {pendingConfirmations.map(student => (
-            <div key={student.id} className="admission-card pending">
-              <div className="student-info">
-                <h4>{student.studentName}</h4>
-                <p><strong>Course:</strong> {student.courseName}</p>
-                <p><strong>Email:</strong> {student.studentEmail}</p>
-                <p><strong>Phone:</strong> {student.studentPhone}</p>
-                <p><strong>Admitted On:</strong> {new Date(student.admissionDate).toLocaleDateString()}</p>
-              </div>
-              <div className="admission-actions">
-                <button
-                  onClick={() => generateAdmissionLetter(student)}
-                  className="btn btn-secondary"
-                >
-                  Generate Letter
-                </button>
-                <button
-                  onClick={() => handleAcceptance(student.studentId, student.courseId, true)}
-                  className="btn success"
-                >
-                  Mark as Confirmed
-                </button>
-                <button
-                  onClick={() => {
-                    if (window.confirm('Are you sure you want to revoke this admission?')) {
-                      handleAcceptance(student.studentId, student.courseId, false);
-                    }
-                  }}
-                  className="btn btn-danger"
-                >
-                  Revoke
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        <h1>Admissions Management</h1>
+        <p>Manage admitted students and track acceptances</p>
 
-        {pendingConfirmations.length === 0 && (
-          <div className="text-center">
-            <p>No pending confirmations.</p>
+        {institute?.status !== 'approved' && (
+          <div className="warning-message">
+            <p>You cannot manage admissions until your institution is approved by the administrator.</p>
           </div>
         )}
-      </div>
 
-      <div className="section">
-        <h3>Confirmed Students ({confirmedStudents.length})</h3>
-        <div className="confirmed-students-list">
-          {confirmedStudents.map(student => (
-            <div key={student.id} className="admission-card confirmed">
-              <div className="student-info">
-                <h4>{student.studentName}</h4>
-                <p><strong>Course:</strong> {student.courseName}</p>
-                <p><strong>Email:</strong> {student.studentEmail}</p>
-                <p><strong>Confirmed On:</strong> {new Date(student.acceptanceDate).toLocaleDateString()}</p>
+        {institute?.status === 'approved' && (
+          <>
+            <div className="dashboard-top">
+              <div className="card">
+                <h3>Total Admitted</h3>
+                <p className="stat-number">{admittedStudents.length}</p>
               </div>
-              <div className="admission-actions">
-                <span className="status-badge status-admitted">Confirmed</span>
-                <button
-                  onClick={() => generateAdmissionLetter(student)}
-                  className="btn btn-secondary"
-                >
-                  View Letter
-                </button>
+              <div className="card">
+                <h3>Confirmed</h3>
+                <p className="stat-number">{confirmedStudents.length}</p>
+              </div>
+              <div className="card">
+                <h3>Pending Confirmation</h3>
+                <p className="stat-number">{pendingConfirmations.length}</p>
+              </div>
+              <div className="card">
+                <h3>Acceptance Rate</h3>
+                <p className="stat-number">
+                  {admittedStudents.length > 0 
+                    ? Math.round((confirmedStudents.length / admittedStudents.length) * 100)
+                    : 0
+                  }%
+                </p>
               </div>
             </div>
-          ))}
-        </div>
 
-        {confirmedStudents.length === 0 && (
-          <div className="text-center">
-            <p>No confirmed students yet.</p>
-          </div>
+            <div className="section">
+              <h3>Pending Student Confirmations ({pendingConfirmations.length})</h3>
+              <div className="admissions-list">
+                {pendingConfirmations.map(student => (
+                  <div key={student.id} className="admission-card pending">
+                    <div className="student-info">
+                      <h4>{student.studentName}</h4>
+                      <p><strong>Course:</strong> {student.courseName}</p>
+                      <p><strong>Email:</strong> {student.studentEmail}</p>
+                      <p><strong>Admitted On:</strong> {new Date(student.admissionDate).toLocaleDateString()}</p>
+                    </div>
+                    <div className="admission-actions">
+                      <button
+                        onClick={() => generateAdmissionLetter(student)}
+                        className="btn btn-secondary"
+                      >
+                        Generate Letter
+                      </button>
+                      <button
+                        onClick={() => handleAcceptance(student.studentId, student.courseId, true)}
+                        className="btn success"
+                      >
+                        Mark as Confirmed
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Are you sure you want to revoke this admission?')) {
+                            handleAcceptance(student.studentId, student.courseId, false);
+                          }
+                        }}
+                        className="btn btn-danger"
+                      >
+                        Revoke
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {pendingConfirmations.length === 0 && (
+                <div className="text-center">
+                  <p>No pending confirmations.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="section">
+              <h3>Confirmed Students ({confirmedStudents.length})</h3>
+              <div className="confirmed-students-list">
+                {confirmedStudents.map(student => (
+                  <div key={student.id} className="admission-card confirmed">
+                    <div className="student-info">
+                      <h4>{student.studentName}</h4>
+                      <p><strong>Course:</strong> {student.courseName}</p>
+                      <p><strong>Email:</strong> {student.studentEmail}</p>
+                      <p><strong>Confirmed On:</strong> {new Date(student.acceptanceDate).toLocaleDateString()}</p>
+                    </div>
+                    <div className="admission-actions">
+                      <span className="status-badge status-admitted">Confirmed</span>
+                      <button
+                        onClick={() => generateAdmissionLetter(student)}
+                        className="btn btn-secondary"
+                      >
+                        View Letter
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {confirmedStudents.length === 0 && (
+                <div className="text-center">
+                  <p>No confirmed students yet.</p>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
-    </div>
+    </ComponentWrapper>
   );
 };
 
