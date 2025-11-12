@@ -120,7 +120,7 @@ const CompanyDashboard = () => {
         <Routes>
           <Route path="/" element={<CompanyHome company={company} currentUser={currentUser} />} />
           <Route path="/profile" element={<CompanyProfile company={company} onUpdate={fetchCompanyData} currentUser={currentUser} />} />
-          <Route path="/jobs" element={<ManageJobs company={company} currentUser={currentUser} />} />
+          <Route path="/jobs" element={<PostJobs company={company} currentUser={currentUser} />} />
           <Route path="/applications" element={<ViewApplications company={company} currentUser={currentUser} />} />
           <Route path="/candidates" element={<CandidateManagement company={company} currentUser={currentUser} />} />
           <Route path="/reports" element={<CompanyReports company={company} currentUser={currentUser} />} />
