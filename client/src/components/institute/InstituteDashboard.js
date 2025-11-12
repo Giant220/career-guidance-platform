@@ -1,147 +1,295 @@
-import React, { useState, useEffect } from 'react';
+const express = require('express');
+const router = express.Router();
+const admin = require('firebase-admin');
+const db = admin.firestore();
+const auth = require('../middleware/auth');
 
-const InstituteDashboard = () => {
-  const [institute, setInstitute] = useState(null);
-  const [stats, setStats] = useState(null);
-  const [courses, setCourses] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+const INSTITUTIONS_COLLECTION = 'institutions';
 
-  useEffect(() => {
-    fetchInstituteData();
-  }, []);
+// Apply auth middleware to all routes
+router.use(auth);
 
-  const fetchInstituteData = async () => {
-    try {
-      setLoading(true);
-      
-      // Fetch institute profile
-      const profileResponse = await fetch('/api/institute/profile');
-      if (!profileResponse.ok) {
-        throw new Error('Failed to fetch institute profile');
-      }
-      const profileData = await profileResponse.json();
-      setInstitute(profileData);
-
-      // Fetch institute stats
-      const statsResponse = await fetch('/api/institute/stats');
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        setStats(statsData);
-      }
-
-      // Fetch institute courses
-      const coursesResponse = await fetch('/api/institute/courses');
-      if (coursesResponse.ok) {
-        const coursesData = await coursesResponse.json();
-        setCourses(coursesData);
-      }
-
-    } catch (error) {
-      console.error('Error fetching institute data:', error);
-      setError(error.message);
-    } finally {
-      setLoading(false);
+// GET institution profile for current user
+router.get('/profile/me', async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    
+    const snapshot = await db.collection(INSTITUTIONS_COLLECTION)
+      .where('userId', '==', userId)
+      .limit(1)
+      .get();
+    
+    if (snapshot.empty) {
+      return res.status(404).json({ 
+        error: 'Institution not found',
+        message: 'Please complete your institution registration.'
+      });
     }
-  };
 
-  if (loading) {
-    return (
-      <div className="section">
-        <div className="loading">Loading institute dashboard...</div>
-      </div>
-    );
+    const institutionDoc = snapshot.docs[0];
+    const institution = institutionDoc.data();
+
+    res.json({
+      id: institutionDoc.id,
+      ...institution
+    });
+  } catch (error) {
+    console.error('Error fetching institution profile:', error);
+    res.status(500).json({ error: 'Failed to fetch institution profile' });
   }
+});
 
-  if (error) {
-    return (
-      <div className="section">
-        <div className="error-message">
-          <h3>Error Loading Dashboard</h3>
-          <p>{error}</p>
-          <button onClick={() => window.location.reload()} className="btn btn-secondary">
-            Reload Page
-          </button>
-        </div>
-      </div>
-    );
+// GET institution stats for current user
+router.get('/stats/me', async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    
+    const snapshot = await db.collection(INSTITUTIONS_COLLECTION)
+      .where('userId', '==', userId)
+      .limit(1)
+      .get();
+    
+    if (snapshot.empty) {
+      return res.status(404).json({ error: 'Institution not found' });
+    }
+
+    const institutionId = snapshot.docs[0].id;
+
+    const coursesSnapshot = await db.collection('courses')
+      .where('institutionId', '==', institutionId)
+      .get();
+
+    const applicationsSnapshot = await db.collection('applications')
+      .where('institutionId', '==', institutionId)
+      .get();
+
+    const studentIds = new Set();
+    applicationsSnapshot.forEach(doc => {
+      const application = doc.data();
+      if (application.studentId) {
+        studentIds.add(application.studentId);
+      }
+    });
+
+    const stats = {
+      totalCourses: coursesSnapshot.size,
+      totalApplications: applicationsSnapshot.size,
+      totalStudents: studentIds.size,
+      pendingApplications: applicationsSnapshot.docs.filter(doc => 
+        doc.data().status === 'pending'
+      ).length
+    };
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching institution stats:', error);
+    res.status(500).json({ error: 'Failed to fetch institution stats' });
   }
+});
 
-  return (
-    <div className="section">
-      <h1>Institute Dashboard</h1>
+// GET institution courses for current user
+router.get('/courses/me', async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    
+    const snapshot = await db.collection(INSTITUTIONS_COLLECTION)
+      .where('userId', '==', userId)
+      .limit(1)
+      .get();
+    
+    if (snapshot.empty) {
+      return res.status(404).json({ error: 'Institution not found' });
+    }
+
+    const institutionId = snapshot.docs[0].id;
+
+    const coursesSnapshot = await db.collection('courses')
+      .where('institutionId', '==', institutionId)
+      .get();
+
+    const courses = [];
+    coursesSnapshot.forEach(doc => {
+      courses.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    res.json(courses);
+  } catch (error) {
+    console.error('Error fetching institution courses:', error);
+    res.status(500).json({ error: 'Failed to fetch courses' });
+  }
+});
+
+// CREATE new institution
+router.post('/', async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const {
+      name,
+      type,
+      email,
+      phone,
+      location,
+      website,
+      established,
+      description
+    } = req.body;
+
+    if (!name || !email || !type || !location) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        required: ['name', 'email', 'type', 'location']
+      });
+    }
+
+    const existingSnapshot = await db.collection(INSTITUTIONS_COLLECTION)
+      .where('email', '==', email)
+      .limit(1)
+      .get();
+
+    if (!existingSnapshot.empty) {
+      return res.status(400).json({ 
+        error: 'Institution with this email already exists' 
+      });
+    }
+
+    const institutionData = {
+      name,
+      type,
+      email,
+      phone: phone || '',
+      location,
+      website: website || '',
+      established: established || '',
+      description: description || '',
+      userId,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const docRef = await db.collection(INSTITUTIONS_COLLECTION).add(institutionData);
+
+    res.status(201).json({
+      success: true,
+      id: docRef.id,
+      message: 'Institution registered successfully. Waiting for admin approval.',
+      status: 'pending'
+    });
+  } catch (error) {
+    console.error('Error creating institution:', error);
+    res.status(500).json({ error: 'Failed to create institution' });
+  }
+});
+
+// GET all institutions (admin only)
+router.get('/', async (req, res) => {
+  try {
+    const { status, forStudents } = req.query;
+    let query = db.collection(INSTITUTIONS_COLLECTION);
+
+    if (forStudents === 'true') {
+      query = query.where('status', '==', 'approved');
+    } else if (status) {
+      query = query.where('status', '==', status);
+    }
+
+    const snapshot = await query.orderBy('createdAt', 'desc').get();
+    const institutions = [];
+    
+    for (const doc of snapshot.docs) {
+      const institution = doc.data();
       
-      {institute && (
-        <div className="dashboard-welcome">
-          <h2>Welcome, {institute.name}</h2>
-          <p>Email: {institute.email} | Type: {institute.type} | Location: {institute.location}</p>
-          <p>Status: <span className={`status-badge status-${institute.status}`}>{institute.status}</span></p>
-          {institute.status === 'pending' && (
-            <div className="pending-notice">
-              <strong>Your institution is pending approval.</strong> You will be able to manage courses and view applications once approved by admin.
-            </div>
-          )}
-          {institute.description && <p>{institute.description}</p>}
-        </div>
-      )}
+      const coursesSnapshot = await db.collection('courses')
+        .where('institutionId', '==', doc.id)
+        .get();
 
-      {stats && institute?.status === 'approved' && (
-        <div className="dashboard-stats">
-          <div className="stat-card">
-            <h3>Total Courses</h3>
-            <p className="stat-number">{stats.totalCourses}</p>
-          </div>
-          <div className="stat-card">
-            <h3>Total Applications</h3>
-            <p className="stat-number">{stats.totalApplications}</p>
-          </div>
-          <div className="stat-card">
-            <h3>Total Students</h3>
-            <p className="stat-number">{stats.totalStudents}</p>
-          </div>
-          <div className="stat-card">
-            <h3>Pending Applications</h3>
-            <p className="stat-number">{stats.pendingApplications}</p>
-          </div>
-        </div>
-      )}
+      const applicationsSnapshot = await db.collection('applications')
+        .where('institutionId', '==', doc.id)
+        .get();
 
-      {courses.length > 0 && institute?.status === 'approved' && (
-        <div className="section">
-          <h3>Your Courses</h3>
-          <div className="courses-list">
-            {courses.map(course => (
-              <div key={course.id} className="course-card">
-                <h4>{course.name}</h4>
-                <p>{course.description}</p>
-                <div className="course-details">
-                  <span>Duration: {course.duration}</span>
-                  <span>Fee: ${course.fee}</span>
-                  <span>Status: <span className={`status-badge status-${course.status}`}>{course.status}</span></span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      institutions.push({
+        id: doc.id,
+        ...institution,
+        courseCount: coursesSnapshot.size,
+        applicationCount: applicationsSnapshot.size,
+        studentCount: new Set(applicationsSnapshot.docs.map(d => d.data().studentId)).size
+      });
+    }
+    
+    res.json(institutions);
+  } catch (error) {
+    console.error('Error fetching institutions:', error);
+    res.status(500).json({ error: 'Failed to fetch institutions' });
+  }
+});
 
-      {institute?.status === 'pending' && (
-        <div className="section">
-          <div className="pending-message">
-            <h3>Waiting for Approval</h3>
-            <p>Your institution registration is under review. You will receive an email notification once your institution is approved.</p>
-            <p>Once approved, you will be able to:</p>
-            <ul>
-              <li>Create and manage courses</li>
-              <li>View student applications</li>
-              <li>Track enrollment statistics</li>
-              <li>Manage your institute profile</li>
-            </ul>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+// APPROVE institution (admin only)
+router.post('/:id/approve', async (req, res) => {
+  try {
+    const institutionId = req.params.id;
+    
+    const institutionDoc = await db.collection(INSTITUTIONS_COLLECTION).doc(institutionId).get();
+    if (!institutionDoc.exists) {
+      return res.status(404).json({ error: 'Institution not found' });
+    }
 
-export default InstituteDashboard;
+    await db.collection(INSTITUTIONS_COLLECTION).doc(institutionId).update({
+      status: 'approved',
+      approvedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    const coursesSnapshot = await db.collection('courses')
+      .where('institutionId', '==', institutionId)
+      .get();
+
+    const batch = db.batch();
+    coursesSnapshot.forEach(doc => {
+      batch.update(doc.ref, {
+        status: 'active',
+        updatedAt: new Date().toISOString()
+      });
+    });
+
+    if (coursesSnapshot.size > 0) {
+      await batch.commit();
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Institution approved successfully.',
+      coursesUpdated: coursesSnapshot.size
+    });
+  } catch (error) {
+    console.error('Error approving institution:', error);
+    res.status(500).json({ error: 'Failed to approve institution' });
+  }
+});
+
+// REJECT institution (admin only)
+router.post('/:id/reject', async (req, res) => {
+  try {
+    const institutionId = req.params.id;
+    const { reason } = req.body;
+
+    await db.collection(INSTITUTIONS_COLLECTION).doc(institutionId).update({
+      status: 'rejected',
+      rejectionReason: reason || '',
+      rejectedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({ 
+      success: true, 
+      message: 'Institution rejected successfully' 
+    });
+  } catch (error) {
+    console.error('Error rejecting institution:', error);
+    res.status(500).json({ error: 'Failed to reject institution' });
+  }
+});
+
+module.exports = router;
