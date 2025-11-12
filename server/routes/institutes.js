@@ -7,9 +7,8 @@ const db = admin.firestore();
 router.get('/', async (req, res) => {
   try {
     const { status, forStudents } = req.query;
-    let query = db.collection('institutions'); // Use consistent collection name
+    let query = db.collection('institutions');
 
-    // CRITICAL FIX: If forStudents=true, only show approved institutes
     if (forStudents === 'true') {
       query = query.where('status', '==', 'approved');
     } else if (status) {
@@ -36,7 +35,7 @@ router.get('/', async (req, res) => {
 // GET single institute by ID
 router.get('/:id', async (req, res) => {
   try {
-    const doc = await db.collection('institutions').doc(req.params.id).get(); // Use consistent collection
+    const doc = await db.collection('institutions').doc(req.params.id).get();
     if (!doc.exists) {
       return res.status(404).json({ error: 'Institute not found' });
     }
@@ -62,7 +61,6 @@ router.post('/', async (req, res) => {
       userId
     } = req.body;
 
-    // Use consistent collection name
     const institutionData = {
       name,
       type,
@@ -73,16 +71,15 @@ router.post('/', async (req, res) => {
       established: established || '',
       description: description || '',
       userId: userId || '',
-      status: 'pending', // Always start as pending
+      status: 'pending',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    // Let Firestore auto-generate ID for consistency
     const docRef = await db.collection('institutions').add(institutionData);
 
     res.status(201).json({ 
-      id: docRef.id,
+      id: docRef.id, 
       ...institutionData,
       message: 'Institute created successfully. Waiting for admin approval.' 
     });
@@ -100,7 +97,7 @@ router.put('/:id', async (req, res) => {
       updatedAt: new Date().toISOString() 
     };
     
-    await db.collection('institutions').doc(req.params.id).update(updateData); // Use consistent collection
+    await db.collection('institutions').doc(req.params.id).update(updateData);
     
     res.json({ message: 'Institute updated successfully' });
   } catch (error) {
@@ -112,7 +109,7 @@ router.put('/:id', async (req, res) => {
 // DELETE institute by ID
 router.delete('/:id', async (req, res) => {
   try {
-    await db.collection('institutions').doc(req.params.id).delete(); // Use consistent collection
+    await db.collection('institutions').doc(req.params.id).delete();
     res.json({ message: 'Institute deleted successfully' });
   } catch (error) {
     console.error('Error deleting institute:', error);
@@ -125,20 +122,17 @@ router.post('/:id/approve', async (req, res) => {
   try {
     const instituteId = req.params.id;
     
-    // Verify institute exists - use consistent collection
     const instituteDoc = await db.collection('institutions').doc(instituteId).get();
     if (!instituteDoc.exists) {
       return res.status(404).json({ error: 'Institute not found' });
     }
 
-    // Update status to approved
     await db.collection('institutions').doc(instituteId).update({
       status: 'approved',
       approvedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     });
 
-    // Also update all courses from this institute to be visible
     const coursesSnapshot = await db.collection('courses')
       .where('institutionId', '==', instituteId)
       .get();
@@ -146,7 +140,7 @@ router.post('/:id/approve', async (req, res) => {
     const batch = db.batch();
     coursesSnapshot.forEach(doc => {
       batch.update(doc.ref, {
-        status: 'active', // Make courses active
+        status: 'active',
         updatedAt: new Date().toISOString()
       });
     });
@@ -192,7 +186,7 @@ router.post('/:id/reject', async (req, res) => {
 // GET institutes for students (only approved ones)
 router.get('/public/approved', async (req, res) => {
   try {
-    const snapshot = await db.collection('institutions') // Use consistent collection
+    const snapshot = await db.collection('institutions')
       .where('status', '==', 'approved')
       .orderBy('name')
       .get();
@@ -209,9 +203,7 @@ router.get('/public/approved', async (req, res) => {
   }
 });
 
-// ✅ CRITICAL: INSTITUTE DASHBOARD ENDPOINTS
-
-// Get institute profile for dashboard
+// Institute Dashboard Routes
 router.get('/profile', async (req, res) => {
   try {
     const snapshot = await db.collection('institutions')
@@ -239,7 +231,6 @@ router.get('/profile', async (req, res) => {
   }
 });
 
-// Get institute stats for dashboard
 router.get('/stats', async (req, res) => {
   try {
     const snapshot = await db.collection('institutions')
@@ -275,7 +266,11 @@ router.get('/stats', async (req, res) => {
       totalStudents: studentIds.size,
       pendingApplications: applicationsSnapshot.docs.filter(doc => 
         doc.data().status === 'pending'
-      ).length
+      ).length,
+      admissionRate: applicationsSnapshot.size > 0 ? 
+        Math.round((applicationsSnapshot.docs.filter(doc => 
+          doc.data().status === 'approved'
+        ).length / applicationsSnapshot.size) * 100) : 0
     };
 
     res.json(stats);
@@ -285,7 +280,6 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// Get institute courses for dashboard
 router.get('/courses', async (req, res) => {
   try {
     const snapshot = await db.collection('institutions')
@@ -316,15 +310,6 @@ router.get('/courses', async (req, res) => {
     console.error('Error fetching institute courses:', error);
     res.status(500).json({ error: 'Failed to fetch courses' });
   }
-});
-
-// Health check for institute routes
-router.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    message: 'Institute routes are working',
-    timestamp: new Date().toISOString()
-  });
 });
 
 module.exports = router;
