@@ -14,8 +14,45 @@ const InstituteDashboard = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // Don't fetch institute data on load - we'll let the profile component handle it
+  // Fetch user's institute data on component mount
   useEffect(() => {
+    const fetchUserInstitute = async () => {
+      if (!currentUser) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const token = await currentUser.getIdToken();
+        
+        // Get all institutes and find the one belonging to current user
+        const response = await fetch('/api/institutes', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const allInstitutes = await response.json();
+          // Find institute that belongs to current user
+          const userInstitute = allInstitutes.find(inst => 
+            inst.userId === currentUser.uid || inst.email === currentUser.email
+          );
+          setInstitute(userInstitute || null);
+        } else {
+          console.error('Failed to fetch institutes');
+          setInstitute(null);
+        }
+      } catch (error) {
+        console.error('Error fetching institutes:', error);
+        setInstitute(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserInstitute();
   }, [currentUser]);
 
   const handleLogout = async () => {
@@ -32,6 +69,16 @@ const InstituteDashboard = () => {
     setInstitute(instituteData);
   };
 
+  if (loading) {
+    return (
+      <div className="institute-dashboard">
+        <div className="loading-spinner">
+          <p>Loading institute data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="institute-dashboard">
       <nav className="navbar">
@@ -44,10 +91,30 @@ const InstituteDashboard = () => {
         <div className="nav-links">
           <Link to="/institute">Dashboard</Link>
           <Link to="/institute/profile">Profile</Link>
-          <Link to="/institute/courses">Courses</Link>
-          <Link to="/institute/applications">Applications</Link>
-          <Link to="/institute/admissions">Admissions</Link>
-          <Link to="/institute/reports">Reports</Link>
+          <Link 
+            to="/institute/courses" 
+            className={!institute ? 'disabled-link' : ''}
+          >
+            Courses
+          </Link>
+          <Link 
+            to="/institute/applications" 
+            className={!institute ? 'disabled-link' : ''}
+          >
+            Applications
+          </Link>
+          <Link 
+            to="/institute/admissions" 
+            className={!institute ? 'disabled-link' : ''}
+          >
+            Admissions
+          </Link>
+          <Link 
+            to="/institute/reports" 
+            className={!institute ? 'disabled-link' : ''}
+          >
+            Reports
+          </Link>
           <button onClick={handleLogout} className="btn btn-secondary">Logout</button>
         </div>
       </nav>
@@ -110,19 +177,19 @@ const InstituteHome = ({ institute, currentUser }) => {
             <div className="card quick-action-card">
               <h3>Manage Courses</h3>
               <p>Add or update your course offerings</p>
-              <Link to="/institute/courses" className="btn" disabled>Manage Courses</Link>
+              <span className="btn btn-disabled">Manage Courses</span>
             </div>
             
             <div className="card quick-action-card">
               <h3>Review Applications</h3>
               <p>Process student applications</p>
-              <Link to="/institute/applications" className="btn" disabled>View Applications</Link>
+              <span className="btn btn-disabled">View Applications</span>
             </div>
             
             <div className="card quick-action-card">
               <h3>Reports</h3>
               <p>View institutional reports</p>
-              <Link to="/institute/reports" className="btn" disabled>View Reports</Link>
+              <span className="btn btn-disabled">View Reports</span>
             </div>
           </div>
 
@@ -150,29 +217,29 @@ const InstituteHome = ({ institute, currentUser }) => {
           <h1>Welcome, {institute?.name || 'Institute'}</h1>
           <p>{institute?.description || 'Manage your institution and student applications'}</p>
           <div className={`status-badge status-${institute?.status || 'pending'}`}>
-            {institute?.status || 'Pending Approval'}
+            {institute?.status ? institute.status.charAt(0).toUpperCase() + institute.status.slice(1) : 'Pending Approval'}
           </div>
         </div>
 
         <div className="dashboard-top">
           <div className="card">
             <h3>Total Courses</h3>
-            <p className="stat-number">0</p>
+            <p className="stat-number">{institute?.coursesCount || 0}</p>
             <small>Active programs</small>
           </div>
           <div className="card">
             <h3>Pending Applications</h3>
-            <p className="stat-number">0</p>
+            <p className="stat-number">{institute?.pendingApplications || 0}</p>
             <small>Require review</small>
           </div>
           <div className="card">
             <h3>Total Students</h3>
-            <p className="stat-number">0</p>
+            <p className="stat-number">{institute?.totalStudents || 0}</p>
             <small>All time</small>
           </div>
           <div className="card">
             <h3>Admission Rate</h3>
-            <p className="stat-number">0%</p>
+            <p className="stat-number">{institute?.admissionRate || '0%'}</p>
             <small>This semester</small>
           </div>
         </div>
