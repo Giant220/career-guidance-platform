@@ -61,21 +61,41 @@ const InstituteProfile = ({ institute, onUpdate }) => {
 
     setSaving(true);
     try {
-      const response = await fetch('/api/institutes/profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          instituteId: currentUser.uid,
-          ...profile
-        })
-      });
+      let response;
+      
+      if (institute) {
+        // Update existing institute
+        response = await fetch(`/api/institutes/${institute.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...profile,
+            userId: currentUser.uid
+          })
+        });
+      } else {
+        // Create new institute
+        response = await fetch('/api/institutes', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...profile,
+            userId: currentUser.uid
+          })
+        });
+      }
 
       if (response.ok) {
+        const result = await response.json();
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
-        onUpdate(); // Refresh parent data
+        onUpdate(result); // Pass the created/updated institute data
+      } else {
+        throw new Error('Failed to save profile');
       }
     } catch (error) {
       console.error('Error saving profile:', error);
@@ -214,31 +234,33 @@ const InstituteProfile = ({ institute, onUpdate }) => {
               {saved && <div className="success">Profile saved successfully!</div>}
             </div>
             <button type="submit" className="btn" disabled={saving}>
-              {saving ? 'Saving...' : 'Save Profile'}
+              {saving ? 'Saving...' : (institute ? 'Update Profile' : 'Create Profile')}
             </button>
           </div>
         </form>
       </div>
 
-      <div className="section mt-1">
-        <h3>Account Information</h3>
-        <div className="account-info">
-          <div className="info-item">
-            <strong>Institute ID:</strong>
-            <span>{institute?.id}</span>
-          </div>
-          <div className="info-item">
-            <strong>Status:</strong>
-            <span className={`status-badge status-${institute?.status}`}>
-              {institute?.status}
-            </span>
-          </div>
-          <div className="info-item">
-            <strong>Registration Date:</strong>
-            <span>{institute?.createdAt ? new Date(institute.createdAt).toLocaleDateString() : 'N/A'}</span>
+      {institute && (
+        <div className="section mt-1">
+          <h3>Account Information</h3>
+          <div className="account-info">
+            <div className="info-item">
+              <strong>Institute ID:</strong>
+              <span>{institute.id}</span>
+            </div>
+            <div className="info-item">
+              <strong>Status:</strong>
+              <span className={`status-badge status-${institute.status}`}>
+                {institute.status}
+              </span>
+            </div>
+            <div className="info-item">
+              <strong>Registration Date:</strong>
+              <span>{institute.createdAt ? new Date(institute.createdAt).toLocaleDateString() : 'N/A'}</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
