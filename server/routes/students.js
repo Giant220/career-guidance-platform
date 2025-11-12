@@ -91,7 +91,56 @@ router.post('/grades', async (req, res) => {
   }
 });
 
-// Get ALL courses for student (combines pre-populated and custom courses)
+// Helper function to check if institute is approved
+async function isInstituteApproved(institutionId, institutionName) {
+  if (!institutionId) {
+    // If no institutionId, check by institutionName in institutes collection
+    if (institutionName) {
+      const institutesSnapshot = await db.collection('institutes')
+        .where('name', '==', institutionName)
+        .get();
+      
+      if (!institutesSnapshot.empty) {
+        const instituteDoc = institutesSnapshot.docs[0];
+        const institute = instituteDoc.data();
+        return institute.status === 'approved';
+      }
+    }
+    // If we can't find the institute, assume it's approved (for backward compatibility with pre-populated data)
+    return true;
+  }
+  
+  // Check by institutionId
+  try {
+    const instituteDoc = await db.collection('institutes').doc(institutionId).get();
+    if (instituteDoc.exists) {
+      const institute = instituteDoc.data();
+      return institute.status === 'approved';
+    }
+    
+    // If institute not found by ID, check by name
+    if (institutionName) {
+      const institutesSnapshot = await db.collection('institutes')
+        .where('name', '==', institutionName)
+        .get();
+      
+      if (!institutesSnapshot.empty) {
+        const instituteDoc = institutesSnapshot.docs[0];
+        const institute = instituteDoc.data();
+        return institute.status === 'approved';
+      }
+    }
+    
+    // If we can't find the institute at all, assume it's approved (pre-populated data)
+    return true;
+  } catch (error) {
+    console.error('Error checking institute status:', error);
+    // If there's an error checking, assume approved to not break existing functionality
+    return true;
+  }
+}
+
+// Get ALL courses for student (FIXED - Proper filtering for ALL courses)
 router.get('/:id/all-courses', async (req, res) => {
   try {
     const studentId = req.params.id;
@@ -107,15 +156,23 @@ router.get('/:id/all-courses', async (req, res) => {
       return res.json([]);
     }
 
+    // Get all courses
     const coursesSnapshot = await db.collection('courses').get();
-    const allCourses = [];
+    const approvedCourses = [];
 
-    coursesSnapshot.forEach(doc => {
+    // Check each course's institute status - for ALL courses
+    for (const doc of coursesSnapshot.docs) {
       const course = { id: doc.id, ...doc.data() };
-      allCourses.push(course);
-    });
+      
+      // Check if the course's institute is approved
+      const isApproved = await isInstituteApproved(course.institutionId, course.institutionName);
+      
+      if (isApproved) {
+        approvedCourses.push(course);
+      }
+    }
 
-    const qualifiedCourses = allCourses.filter(course => 
+    const qualifiedCourses = approvedCourses.filter(course => 
       qualifiesForCourse(student.grades, course.requirements)
     );
     
@@ -126,7 +183,7 @@ router.get('/:id/all-courses', async (req, res) => {
   }
 });
 
-// Get qualified courses for student (original endpoint)
+// Get qualified courses for student (FIXED - Proper filtering for ALL courses)
 router.get('/:id/qualified-courses', async (req, res) => {
   try {
     const studentDoc = await db.collection('students').doc(req.params.id).get();
@@ -141,19 +198,90 @@ router.get('/:id/qualified-courses', async (req, res) => {
       return res.json([]);
     }
 
+    // Get all courses
     const coursesSnapshot = await db.collection('courses').get();
-    const qualifiedCourses = [];
+    const approvedCourses = [];
 
-    coursesSnapshot.forEach(doc => {
+    // Check each course's institute status - for ALL courses
+    for (const doc of coursesSnapshot.docs) {
       const course = { id: doc.id, ...doc.data() };
-      if (qualifiesForCourse(student.grades, course.requirements)) {
-        qualifiedCourses.push(course);
+      
+      // Check if the course's institute is approved
+      const isApproved = await isInstituteApproved(course.institutionId, course.institutionName);
+      
+      if (isApproved) {
+        approvedCourses.push(course);
       }
-    });
+    }
+
+    const qualifiedCourses = approvedCourses.filter(course => 
+      qualifiesForCourse(student.grades, course.requirements)
+    );
 
     res.json(qualifiedCourses);
   } catch (error) {
     console.error('Error fetching qualified courses:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get available courses for browsing (FIXED - All approved institute courses)
+router.get('/:id/available-courses', async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    
+    // Get all courses
+    const coursesSnapshot = await db.collection('courses').get();
+    const availableCourses = [];
+
+    // Check each course's institute status - for ALL courses
+    for (const doc of coursesSnapshot.docs) {
+      const course = { id: doc.id, ...doc.data() };
+      
+      // Check if the course's institute is approved
+      const isApproved = await isInstituteApproved(course.institutionId, course.institutionName);
+      
+      if (isApproved) {
+        availableCourses.push({
+          ...course,
+          institutionName: course.institutionName || 'Unknown Institute',
+          institutionStatus: 'approved'
+        });
+      }
+    }
+
+    res.json(availableCourses);
+  } catch (error) {
+    console.error('Error fetching available courses:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get courses by institute (NEW - For testing)
+router.get('/:id/institute/:instituteId/courses', async (req, res) => {
+  try {
+    const { instituteId } = req.params;
+    
+    // Check if institute is approved
+    const isApproved = await isInstituteApproved(instituteId, null);
+    
+    if (!isApproved) {
+      return res.json([]);
+    }
+
+    // Get courses for this institute
+    const coursesSnapshot = await db.collection('courses')
+      .where('institutionId', '==', instituteId)
+      .get();
+    
+    const courses = [];
+    coursesSnapshot.forEach(doc => {
+      courses.push({ id: doc.id, ...doc.data() });
+    });
+
+    res.json(courses);
+  } catch (error) {
+    console.error('Error fetching institute courses:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -527,12 +655,16 @@ router.get('/:id/stats', async (req, res) => {
     let qualifiedCourses = 0;
     if (student && student.grades) {
       const coursesSnapshot = await db.collection('courses').get();
-      coursesSnapshot.forEach(doc => {
+      
+      for (const doc of coursesSnapshot.docs) {
         const course = doc.data();
-        if (qualifiesForCourse(student.grades, course.requirements)) {
+        
+        // Only count courses from approved institutes
+        const isApproved = await isInstituteApproved(course.institutionId, course.institutionName);
+        if (isApproved && qualifiesForCourse(student.grades, course.requirements)) {
           qualifiedCourses++;
         }
-      });
+      }
     }
 
     res.json({
