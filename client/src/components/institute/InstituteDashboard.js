@@ -23,18 +23,29 @@ const InstituteDashboard = () => {
 
       try {
         const token = await currentUser.getIdToken();
+        console.log('Fetching institutes with token...');
+        
         const response = await fetch('/api/institutes', {
           headers: {
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
           }
         });
 
+        console.log('Response status:', response.status);
+        
         if (response.ok) {
           const allInstitutes = await response.json();
+          console.log('All institutes:', allInstitutes);
+          
+          // Find institute that belongs to current user
           const userInstitute = allInstitutes.find(inst => 
             inst.userId === currentUser.uid
           );
+          console.log('User institute found:', userInstitute);
           setInstitute(userInstitute || null);
+        } else {
+          console.error('Failed to fetch institutes:', response.status);
         }
       } catch (error) {
         console.error('Error fetching institutes:', error);
