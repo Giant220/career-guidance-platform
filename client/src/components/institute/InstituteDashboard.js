@@ -11,10 +11,9 @@ import './InstituteDashboard.css';
 const InstituteDashboard = () => {
   const { currentUser, logout } = useAuth();
   const [institute, setInstitute] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Fetch user's institute data on component mount
   useEffect(() => {
     const fetchUserInstitute = async () => {
       if (!currentUser) {
@@ -23,10 +22,7 @@ const InstituteDashboard = () => {
       }
 
       try {
-        setLoading(true);
         const token = await currentUser.getIdToken();
-        
-        // Get all institutes and find the one belonging to current user
         const response = await fetch('/api/institutes', {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -35,14 +31,10 @@ const InstituteDashboard = () => {
 
         if (response.ok) {
           const allInstitutes = await response.json();
-          // Find institute that belongs to current user
           const userInstitute = allInstitutes.find(inst => 
-            inst.userId === currentUser.uid || inst.email === currentUser.email
+            inst.userId === currentUser.uid
           );
           setInstitute(userInstitute || null);
-        } else {
-          console.error('Failed to fetch institutes');
-          setInstitute(null);
         }
       } catch (error) {
         console.error('Error fetching institutes:', error);
@@ -64,7 +56,6 @@ const InstituteDashboard = () => {
     }
   };
 
-  // Function to update institute data from child components
   const updateInstitute = (instituteData) => {
     setInstitute(instituteData);
   };
@@ -91,30 +82,10 @@ const InstituteDashboard = () => {
         <div className="nav-links">
           <Link to="/institute">Dashboard</Link>
           <Link to="/institute/profile">Profile</Link>
-          <Link 
-            to="/institute/courses" 
-            className={!institute ? 'disabled-link' : ''}
-          >
-            Courses
-          </Link>
-          <Link 
-            to="/institute/applications" 
-            className={!institute ? 'disabled-link' : ''}
-          >
-            Applications
-          </Link>
-          <Link 
-            to="/institute/admissions" 
-            className={!institute ? 'disabled-link' : ''}
-          >
-            Admissions
-          </Link>
-          <Link 
-            to="/institute/reports" 
-            className={!institute ? 'disabled-link' : ''}
-          >
-            Reports
-          </Link>
+          <Link to="/institute/courses" className={!institute ? 'disabled-link' : ''}>Courses</Link>
+          <Link to="/institute/applications" className={!institute ? 'disabled-link' : ''}>Applications</Link>
+          <Link to="/institute/admissions" className={!institute ? 'disabled-link' : ''}>Admissions</Link>
+          <Link to="/institute/reports" className={!institute ? 'disabled-link' : ''}>Reports</Link>
           <button onClick={handleLogout} className="btn btn-secondary">Logout</button>
         </div>
       </nav>
@@ -134,7 +105,6 @@ const InstituteDashboard = () => {
 };
 
 const InstituteHome = ({ institute, currentUser }) => {
-  // If no institute, show setup message
   if (!institute) {
     return (
       <div className="institute-home">
