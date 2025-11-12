@@ -11,21 +11,49 @@ const CompanyDashboard = () => {
   const { currentUser, logout } = useAuth();
   const [company, setCompany] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchCompanyData();
+    if (currentUser) {
+      fetchCompanyData();
+    }
   }, [currentUser]);
 
   const fetchCompanyData = async () => {
     try {
-      if (currentUser) {
-        const response = await fetch(`/api/companies/${currentUser.uid}/profile`);
-        const data = await response.json();
-        setCompany(data);
+      setLoading(true);
+      setError(null);
+
+      if (!currentUser) {
+        throw new Error('No user logged in');
       }
+
+      const token = await currentUser.getIdToken();
+      
+      const response = await fetch('/api/companies/profile/me', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          navigate('/company-registration');
+          return;
+        }
+        throw new Error(`Failed to fetch company data: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setCompany(data);
     } catch (error) {
       console.error('Error fetching company data:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
@@ -41,20 +69,46 @@ const CompanyDashboard = () => {
   };
 
   if (loading) {
-    return <div className="loading">Loading company dashboard...</div>;
+    return (
+      <div className="section">
+        <div className="loading">Loading company dashboard...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="section">
+        <div className="error-message">
+          <h3>Unable to Load Dashboard</h3>
+          <p>{error}</p>
+          <div className="action-buttons">
+            <button onClick={fetchCompanyData} className="btn btn-primary">
+              Try Again
+            </button>
+            <button 
+              onClick={() => navigate('/company-registration')} 
+              className="btn btn-secondary"
+            >
+              Complete Registration
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="company-dashboard">
       <nav className="navbar">
         <div className="logo-area">
-          <div className="logo" style={{ backgroundColor: '#ffda77' }}></div>
+          <div className="logo" style={{ backgroundColor: '#ffda77', opacity: 0 }}></div>
           <span className="brand">
             {company?.name || 'Company Portal'}
           </span>
         </div>
         <div className="nav-links">
-          <Link to="/company" onClick={() => window.location.reload()}>Dashboard</Link>
+          <Link to="/company">Dashboard</Link>
           <Link to="/company/profile">Profile</Link>
           <Link to="/company/jobs">Jobs</Link>
           <Link to="/company/applicants">Applicants</Link>
@@ -65,36 +119,70 @@ const CompanyDashboard = () => {
 
       <div className="main-content">
         <Routes>
-          <Route path="/" element={<CompanyHome company={company} />} />
-          <Route path="/profile" element={<CompanyProfile company={company} onUpdate={fetchCompanyData} />} />
-          <Route path="/jobs" element={<PostJobs company={company} />} />
-          <Route path="/applicants" element={<ViewApplicants company={company} />} />
-          <Route path="/reports" element={<CompanyReports company={company} />} />
+          <Route path="/" element={<CompanyHome company={company} currentUser={currentUser} />} />
+          <Route path="/profile" element={<CompanyProfile company={company} onUpdate={fetchCompanyData} currentUser={currentUser} />} />
+          <Route path="/jobs" element={<PostJobs company={company} currentUser={currentUser} />} />
+          <Route path="/applicants" element={<ViewApplicants company={company} currentUser={currentUser} />} />
+          <Route path="/reports" element={<CompanyReports company={company} currentUser={currentUser} />} />
         </Routes>
       </div>
     </div>
   );
 };
 
-const CompanyHome = ({ company }) => {
+const CompanyHome = ({ company, currentUser }) => {
   const [stats, setStats] = useState({
     activeJobs: 0,
     totalApplications: 0,
     qualifiedCandidates: 0,
     interviewRate: 0
   });
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(false);
 
   useEffect(() => {
-    fetchCompanyStats();
-  }, [company]);
+    if (currentUser && company) {
+      fetchCompanyStats();
+    }
+  }, [company, currentUser]);
 
   const fetchCompanyStats = async () => {
     try {
-      const response = await fetch(`/api/companies/${company?.id}/stats`);
+      setStatsLoading(true);
+      setStatsError(false);
+      
+      if (!company?.id || !currentUser) {
+        throw new Error('Company ID or user not available');
+      }
+
+      const token = await currentUser.getIdToken();
+      const response = await fetch('/api/companies/stats/me', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch stats: ${response.status}`);
+      }
+      
       const data = await response.json();
       setStats(data);
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      console.error('Error fetching company stats:', error);
+      setStatsError(true);
+      setStats({
+        activeJobs: 0,
+        totalApplications: 0,
+        qualifiedCandidates: 0,
+        interviewRate: 0
+      });
+    } finally {
+      setStatsLoading(false);
     }
   };
 
@@ -102,32 +190,46 @@ const CompanyHome = ({ company }) => {
     <div className="company-home">
       <div className="section">
         <div className="company-header">
-          <h1>Welcome, {company?.name}</h1>
-          <p>{company?.description || 'Find qualified graduates and manage job applications'}</p>
+          <h1>Welcome, {company?.name || 'Company'}</h1>
+          <p>{company?.description || 'Manage your job postings and candidate applications'}</p>
           <div className={`status-badge status-${company?.status || 'pending'}`}>
             {company?.status || 'Pending Approval'}
           </div>
         </div>
 
+        {statsError && (
+          <div className="warning-message">
+            <p>⚠️ Statistics are temporarily unavailable. You can still manage your jobs and applications.</p>
+          </div>
+        )}
+
         <div className="dashboard-top">
           <div className="card">
             <h3>Active Jobs</h3>
-            <p className="stat-number">{stats.activeJobs}</p>
-            <small>Currently posted</small>
+            <p className="stat-number">
+              {statsLoading ? '...' : stats.activeJobs}
+            </p>
+            <small>Current postings</small>
           </div>
           <div className="card">
             <h3>Total Applications</h3>
-            <p className="stat-number">{stats.totalApplications}</p>
+            <p className="stat-number">
+              {statsLoading ? '...' : stats.totalApplications}
+            </p>
             <small>All time</small>
           </div>
           <div className="card">
             <h3>Qualified Candidates</h3>
-            <p className="stat-number">{stats.qualifiedCandidates}</p>
+            <p className="stat-number">
+              {statsLoading ? '...' : stats.qualifiedCandidates}
+            </p>
             <small>Ready for interview</small>
           </div>
           <div className="card">
             <h3>Interview Rate</h3>
-            <p className="stat-number">{stats.interviewRate}%</p>
+            <p className="stat-number">
+              {statsLoading ? '...' : `${stats.interviewRate}%`}
+            </p>
             <small>Conversion rate</small>
           </div>
         </div>
