@@ -21,7 +21,7 @@ const InstituteDashboard = () => {
   const fetchInstituteData = async () => {
     try {
       if (currentUser) {
-        const response = await fetch(`/api/institute/profile`);
+        const response = await fetch(`/api/institutes/profile`);
         if (!response.ok) {
           throw new Error('Failed to fetch institute data');
         }
@@ -52,7 +52,7 @@ const InstituteDashboard = () => {
     <div className="institute-dashboard">
       <nav className="navbar">
         <div className="logo-area">
-          <div className="logo" style={{ backgroundColor: '#ffda77' }}></div>
+          <div className="logo" style={{ backgroundColor: '#ffda77',opacity:0}}></div>
           <span className="brand">
             {institute?.name || 'Institute Portal'}
           </span>
@@ -105,7 +105,7 @@ const InstituteHome = ({ institute }) => {
         throw new Error('Institute ID not available');
       }
 
-      const response = await fetch(`/api/institute/stats`);
+      const response = await fetch(`/api/institutes/stats`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch stats: ${response.status}`);
