@@ -89,7 +89,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// UPDATE institute by ID - Enhanced with notification
+// UPDATE institute by ID
 router.put('/:id', async (req, res) => {
   try {
     const instituteId = req.params.id;
@@ -109,20 +109,7 @@ router.put('/:id', async (req, res) => {
     // Update the institute
     await db.collection('institutes').doc(instituteId).update(updateData);
     
-    // If status changed to approved, create a notification
-    if (updateData.status === 'approved' && oldInstitute.status !== 'approved') {
-      await db.collection('notifications').add({
-        type: 'institute_approved',
-        instituteId: instituteId,
-        userId: oldInstitute.userId,
-        instituteName: oldInstitute.name,
-        message: `Your institute "${oldInstitute.name}" has been approved! You can now manage courses and applications.`,
-        createdAt: new Date().toISOString(),
-        read: false
-      });
-      
-      console.log(`✅ Institute ${instituteId} approved. Notification created for user ${oldInstitute.userId}`);
-    }
+    console.log(`✅ Institute ${instituteId} updated. Status: ${updateData.status}`);
     
     res.json({ 
       message: 'Institute updated successfully',
@@ -146,7 +133,7 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// APPROVE institute - Enhanced with notification
+// APPROVE institute
 router.post('/:id/approve', async (req, res) => {
   try {
     const instituteId = req.params.id;
@@ -165,16 +152,7 @@ router.post('/:id/approve', async (req, res) => {
       updatedAt: new Date().toISOString()
     });
 
-    // Create notification for institute owner
-    await db.collection('notifications').add({
-      type: 'institute_approved',
-      instituteId: instituteId,
-      userId: instituteData.userId,
-      instituteName: instituteData.name,
-      message: `Your institute "${instituteData.name}" has been approved! You can now manage courses and applications.`,
-      createdAt: new Date().toISOString(),
-      read: false
-    });
+    console.log(`✅ Institute ${instituteId} approved for user ${instituteData.userId}`);
 
     // Activate all courses for this institute
     const coursesSnapshot = await db.collection('courses')
@@ -196,8 +174,7 @@ router.post('/:id/approve', async (req, res) => {
     res.json({ 
       success: true, 
       message: 'Institute approved successfully. Courses are now visible to students.',
-      coursesUpdated: coursesSnapshot.size,
-      notificationSent: true
+      coursesUpdated: coursesSnapshot.size
     });
   } catch (error) {
     console.error('Error approving institute:', error);
@@ -225,16 +202,7 @@ router.post('/:id/reject', async (req, res) => {
       updatedAt: new Date().toISOString()
     });
 
-    // Create notification for rejection
-    await db.collection('notifications').add({
-      type: 'institute_rejected',
-      instituteId: instituteId,
-      userId: instituteData.userId,
-      instituteName: instituteData.name,
-      message: `Your institute "${instituteData.name}" has been rejected. Reason: ${reason || 'No reason provided'}`,
-      createdAt: new Date().toISOString(),
-      read: false
-    });
+    console.log(`❌ Institute ${instituteId} rejected for user ${instituteData.userId}`);
 
     res.json({ 
       success: true, 
@@ -263,46 +231,6 @@ router.get('/public/approved', async (req, res) => {
   } catch (error) {
     console.error('Error fetching approved institutes:', error);
     res.status(500).json({ error: 'Failed to fetch institutes' });
-  }
-});
-
-// GET notifications for user
-router.get('/user/:userId/notifications', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    
-    const snapshot = await db.collection('notifications')
-      .where('userId', '==', userId)
-      .orderBy('createdAt', 'desc')
-      .limit(10)
-      .get();
-    
-    const notifications = [];
-    snapshot.forEach(doc => {
-      notifications.push({ id: doc.id, ...doc.data() });
-    });
-    
-    res.json(notifications);
-  } catch (error) {
-    console.error('Error fetching notifications:', error);
-    res.status(500).json({ error: 'Failed to fetch notifications' });
-  }
-});
-
-// MARK notification as read
-router.patch('/notifications/:id/read', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    await db.collection('notifications').doc(id).update({
-      read: true,
-      readAt: new Date().toISOString()
-    });
-    
-    res.json({ success: true, message: 'Notification marked as read' });
-  } catch (error) {
-    console.error('Error marking notification as read:', error);
-    res.status(500).json({ error: 'Failed to mark notification as read' });
   }
 });
 
