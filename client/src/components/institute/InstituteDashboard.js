@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext'; // This is the correct path
+import { useAuth } from '../../contexts/AuthContext';
 import InstituteProfile from './InstituteProfile';
 import ManageCourses from './ManageCourses';
 import ViewApplications from './ViewApplications';
@@ -12,24 +12,47 @@ const InstituteDashboard = () => {
   const { currentUser, logout } = useAuth();
   const [institute, setInstitute] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchInstituteData();
+    if (currentUser) {
+      fetchInstituteData();
+    }
   }, [currentUser]);
 
   const fetchInstituteData = async () => {
     try {
-      if (currentUser) {
-        const response = await fetch(`/api/institutes/profile`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch institute data');
-        }
-        const data = await response.json();
-        setInstitute(data);
+      setLoading(true);
+      setError(null);
+
+      if (!currentUser) {
+        throw new Error('No user logged in');
       }
+
+      const token = await currentUser.getIdToken();
+      
+      const response = await fetch('/api/institutes/profile/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          // No institution found - redirect to registration
+          navigate('/institute-registration');
+          return;
+        }
+        throw new Error(`Failed to fetch institute data: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setInstitute(data);
     } catch (error) {
       console.error('Error fetching institute data:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
@@ -45,14 +68,40 @@ const InstituteDashboard = () => {
   };
 
   if (loading) {
-    return <div className="loading">Loading institute dashboard...</div>;
+    return (
+      <div className="section">
+        <div className="loading">Loading institute dashboard...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="section">
+        <div className="error-message">
+          <h3>Unable to Load Dashboard</h3>
+          <p>{error}</p>
+          <div className="action-buttons">
+            <button onClick={fetchInstituteData} className="btn btn-primary">
+              Try Again
+            </button>
+            <button 
+              onClick={() => navigate('/institute-registration')} 
+              className="btn btn-secondary"
+            >
+              Complete Registration
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="institute-dashboard">
       <nav className="navbar">
         <div className="logo-area">
-          <div className="logo" style={{ backgroundColor: '#ffda77',opacity:0}}></div>
+          <div className="logo" style={{ backgroundColor: '#ffda77', opacity: 0 }}></div>
           <span className="brand">
             {institute?.name || 'Institute Portal'}
           </span>
@@ -70,19 +119,19 @@ const InstituteDashboard = () => {
 
       <div className="main-content">
         <Routes>
-          <Route path="/" element={<InstituteHome institute={institute} />} />
-          <Route path="/profile" element={<InstituteProfile institute={institute} onUpdate={fetchInstituteData} />} />
-          <Route path="/courses" element={<ManageCourses institute={institute} />} />
-          <Route path="/applications" element={<ViewApplications institute={institute} />} />
-          <Route path="/admissions" element={<AdmissionsManagement institute={institute} />} />
-          <Route path="/reports" element={<InstituteReports institute={institute} />} />
+          <Route path="/" element={<InstituteHome institute={institute} currentUser={currentUser} />} />
+          <Route path="/profile" element={<InstituteProfile institute={institute} onUpdate={fetchInstituteData} currentUser={currentUser} />} />
+          <Route path="/courses" element={<ManageCourses institute={institute} currentUser={currentUser} />} />
+          <Route path="/applications" element={<ViewApplications institute={institute} currentUser={currentUser} />} />
+          <Route path="/admissions" element={<AdmissionsManagement institute={institute} currentUser={currentUser} />} />
+          <Route path="/reports" element={<InstituteReports institute={institute} currentUser={currentUser} />} />
         </Routes>
       </div>
     </div>
   );
 };
 
-const InstituteHome = ({ institute }) => {
+const InstituteHome = ({ institute, currentUser }) => {
   const [stats, setStats] = useState({
     totalCourses: 0,
     pendingApplications: 0,
@@ -93,19 +142,27 @@ const InstituteHome = ({ institute }) => {
   const [statsError, setStatsError] = useState(false);
 
   useEffect(() => {
-    fetchInstituteStats();
-  }, [institute]);
+    if (currentUser && institute) {
+      fetchInstituteStats();
+    }
+  }, [institute, currentUser]);
 
   const fetchInstituteStats = async () => {
     try {
       setStatsLoading(true);
       setStatsError(false);
       
-      if (!institute?.id) {
-        throw new Error('Institute ID not available');
+      if (!institute?.id || !currentUser) {
+        throw new Error('Institute ID or user not available');
       }
 
-      const response = await fetch(`/api/institutes/stats`);
+      const token = await currentUser.getIdToken();
+      const response = await fetch('/api/institutes/stats/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       
       if (!response.ok) {
         throw new Error(`Failed to fetch stats: ${response.status}`);
@@ -116,7 +173,6 @@ const InstituteHome = ({ institute }) => {
     } catch (error) {
       console.error('Error fetching institute stats:', error);
       setStatsError(true);
-      // Set default stats to prevent redirects
       setStats({
         totalCourses: 0,
         pendingApplications: 0,
