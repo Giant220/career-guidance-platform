@@ -27,7 +27,7 @@ const StudentDashboard = () => {
     <div className="student-dashboard">
       <nav className="navbar">
         <div className="logo-area">
-          <div className="logo" style={{ backgroundColor: '#ffda77',opacity:0 }}></div>
+          <div className="logo" style={{ backgroundColor: '#ffda77', opacity: 0 }}></div>
           <span className="brand">Student Portal</span>
         </div>
         <div className="nav-links">
@@ -42,21 +42,20 @@ const StudentDashboard = () => {
 
       <div className="main-content">
         <Routes>
-          <Route path="/" element={<StudentHome />} />
-          <Route path="/profile" element={<StudentProfile />} />
-          <Route path="/courses" element={<CourseApplication />} />
-          <Route path="/admissions" element={<AdmissionsResults />} />
-          <Route path="/jobs" element={<JobApplications />} />
-          <Route path="/transcript" element={<TranscriptUpload />} />
-          <Route path="/grades" element={<GradesEntry />} />
+          <Route path="/" element={<StudentHome currentUser={currentUser} />} />
+          <Route path="/profile" element={<StudentProfile currentUser={currentUser} />} />
+          <Route path="/courses" element={<CourseApplication currentUser={currentUser} />} />
+          <Route path="/admissions" element={<AdmissionsResults currentUser={currentUser} />} />
+          <Route path="/jobs" element={<JobApplications currentUser={currentUser} />} />
+          <Route path="/transcript" element={<TranscriptUpload currentUser={currentUser} />} />
+          <Route path="/grades" element={<GradesEntry currentUser={currentUser} />} />
         </Routes>
       </div>
     </div>
   );
 };
 
-const StudentHome = () => {
-  const { currentUser } = useAuth();
+const StudentHome = ({ currentUser }) => {
   const [stats, setStats] = useState({
     applications: 0,
     admissions: 0,
@@ -64,6 +63,7 @@ const StudentHome = () => {
     qualifiedCourses: 0
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -73,19 +73,25 @@ const StudentHome = () => {
       }
       
       try {
-        const response = await fetch(`/api/students/${currentUser.uid}/stats`);
+        const token = await currentUser.getIdToken();
+        const response = await fetch(`/api/students/${currentUser.uid}/stats`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
         if (response.ok) {
           const data = await response.json();
           setStats(data);
         } else {
-          // If API fails, fallback to zeros (safe)
           console.log('Stats API not ready yet, using zeros');
           setStats({ applications: 0, admissions: 0, jobsApplied: 0, qualifiedCourses: 0 });
         }
       } catch (error) {
         console.log('Error fetching stats, using safe fallback:', error);
-        // Safe fallback - zeros won't break anything
         setStats({ applications: 0, admissions: 0, jobsApplied: 0, qualifiedCourses: 0 });
+        setError('Failed to load statistics');
       } finally {
         setLoading(false);
       }
@@ -155,6 +161,12 @@ const StudentHome = () => {
       <div className="section">
         <h1>Welcome, {currentUser?.displayName || 'Student'}!</h1>
         <p>Manage your educational journey and career path</p>
+        
+        {error && (
+          <div className="warning-message">
+            <p>⚠️ {error}</p>
+          </div>
+        )}
         
         <div className="dashboard-top">
           <div className="card">
