@@ -19,16 +19,16 @@ router.get('/profile/:id', async (req, res) => {
   }
 });
 
-// Get system stats
+// Get system stats - FIXED COLLECTION NAMES
 router.get('/stats', async (req, res) => {
   try {
     // Get user counts
     const usersSnapshot = await db.collection('users').get();
-    const institutionsSnapshot = await db.collection('institutions').get();
+    const institutesSnapshot = await db.collection('institutes').get(); // FIXED: institutions -> institutes
     const companiesSnapshot = await db.collection('companies').get();
     const applicationsSnapshot = await db.collection('applications').get();
 
-    const pendingInstitutions = institutionsSnapshot.docs.filter(doc => 
+    const pendingInstitutes = institutesSnapshot.docs.filter(doc => 
       doc.data().status === 'pending'
     ).length;
 
@@ -36,11 +36,11 @@ router.get('/stats', async (req, res) => {
       doc.data().status === 'pending'
     ).length;
 
-    const pendingApprovals = pendingInstitutions + pendingCompanies;
+    const pendingApprovals = pendingInstitutes + pendingCompanies;
 
     res.json({
       totalUsers: usersSnapshot.size,
-      totalInstitutions: institutionsSnapshot.size,
+      totalInstitutions: institutesSnapshot.size, // FIXED
       totalCompanies: companiesSnapshot.size,
       pendingApprovals: pendingApprovals,
       activeApplications: applicationsSnapshot.size,
@@ -52,7 +52,7 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// Get recent activity
+// Get recent activity - FIXED COLLECTION NAMES
 router.get('/activity', async (req, res) => {
   try {
     // Get recent users (real data)
@@ -73,19 +73,19 @@ router.get('/activity', async (req, res) => {
       });
     });
 
-    // Get recent institutions (real data)
-    const institutionsSnapshot = await db.collection('institutions')
+    // Get recent institutes (real data) - FIXED: institutions -> institutes
+    const institutesSnapshot = await db.collection('institutes')
       .orderBy('createdAt', 'desc')
       .limit(3)
       .get();
 
-    institutionsSnapshot.forEach(doc => {
-      const institution = doc.data();
+    institutesSnapshot.forEach(doc => {
+      const institute = doc.data();
       recentActivity.push({
         type: 'institution',
-        message: `New institution: ${institution.name}`,
-        user: institution.email,
-        timestamp: institution.createdAt
+        message: `New institute: ${institute.name}`,
+        user: institute.email,
+        timestamp: institute.createdAt
       });
     });
 
@@ -102,24 +102,166 @@ router.get('/activity', async (req, res) => {
   }
 });
 
-// Get pending institutions for approval
+// Get pending institutes for approval - FIXED COLLECTION NAME
 router.get('/institutions/pending', async (req, res) => {
   try {
-    const snapshot = await db.collection('institutions')
+    const snapshot = await db.collection('institutes') // FIXED: institutions -> institutes
       .where('status', '==', 'pending')
       .get();
     
-    const pendingInstitutions = [];
+    const pendingInstitutes = [];
     snapshot.forEach(doc => {
-      pendingInstitutions.push({
+      pendingInstitutes.push({
         id: doc.id,
         ...doc.data()
       });
     });
 
-    res.json(pendingInstitutions);
+    res.json(pendingInstitutes);
   } catch (error) {
-    console.error('Error fetching pending institutions:', error);
+    console.error('Error fetching pending institutes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// CRITICAL: APPROVE INSTITUTE ENDPOINT (MISSING)
+router.post('/institutions/:id/approve', async (req, res) => {
+  try {
+    const instituteId = req.params.id;
+    console.log(`Admin approving institute: ${instituteId}`);
+
+    // Get the current institute data
+    const instituteDoc = await db.collection('institutes').doc(instituteId).get();
+    
+    if (!instituteDoc.exists) {
+      return res.status(404).json({ error: 'Institute not found' });
+    }
+
+    const instituteData = instituteDoc.data();
+    console.log('Current institute status:', instituteData.status);
+
+    // Update the institute status to approved
+    const updateData = {
+      status: 'approved',
+      approvedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    console.log('Updating institute with:', updateData);
+
+    await db.collection('institutes').doc(instituteId).update(updateData);
+
+    // Verify the update
+    const updatedDoc = await db.collection('institutes').doc(instituteId).get();
+    console.log('Updated institute status:', updatedDoc.data().status);
+
+    res.json({ 
+      success: true, 
+      message: 'Institute approved successfully',
+      institute: {
+        id: instituteId,
+        ...updatedDoc.data()
+      }
+    });
+  } catch (error) {
+    console.error('Error approving institute:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// CRITICAL: REJECT INSTITUTE ENDPOINT (MISSING)
+router.post('/institutions/:id/reject', async (req, res) => {
+  try {
+    const instituteId = req.params.id;
+    const { reason } = req.body;
+
+    console.log(`Rejecting institute: ${instituteId}, reason: ${reason}`);
+
+    const updateData = {
+      status: 'rejected',
+      rejectionReason: reason || '',
+      rejectedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    await db.collection('institutes').doc(instituteId).update(updateData);
+
+    // Verify the update
+    const updatedDoc = await db.collection('institutes').doc(instituteId).get();
+
+    res.json({ 
+      success: true, 
+      message: 'Institute rejected successfully',
+      institute: {
+        id: instituteId,
+        ...updatedDoc.data()
+      }
+    });
+  } catch (error) {
+    console.error('Error rejecting institute:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all institutes - FIXED COLLECTION NAME
+router.get('/institutions', async (req, res) => {
+  try {
+    const snapshot = await db.collection('institutes').get(); // FIXED: institutions -> institutes
+    const institutes = [];
+    
+    for (const doc of snapshot.docs) {
+      const institute = doc.data();
+      
+      // Get course count
+      const coursesSnapshot = await db.collection('courses')
+        .where('institutionId', '==', doc.id)
+        .get();
+
+      // Get application count
+      const applicationsSnapshot = await db.collection('applications')
+        .where('institutionId', '==', doc.id)
+        .get();
+
+      institutes.push({
+        id: doc.id,
+        ...institute,
+        courseCount: coursesSnapshot.size,
+        applicationCount: applicationsSnapshot.size,
+        studentCount: new Set(applicationsSnapshot.docs.map(d => d.data().studentId)).size
+      });
+    }
+
+    res.json(institutes);
+  } catch (error) {
+    console.error('Error fetching institutes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update institute status - FIXED COLLECTION NAME
+router.put('/institutions/:instituteId/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    await db.collection('institutes').doc(req.params.instituteId).update({ // FIXED: institutions -> institutes
+      status,
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({ success: true, message: 'Institute status updated successfully' });
+  } catch (error) {
+    console.error('Error updating institute status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete institute - FIXED COLLECTION NAME
+router.delete('/institutions/:instituteId', async (req, res) => {
+  try {
+    await db.collection('institutes').doc(req.params.instituteId).delete(); // FIXED: institutions -> institutes
+    res.json({ success: true, message: 'Institute deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting institute:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -204,69 +346,6 @@ router.delete('/users/:userId', async (req, res) => {
     res.json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
     console.error('Error deleting user:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get all institutions
-router.get('/institutions', async (req, res) => {
-  try {
-    const snapshot = await db.collection('institutions').get();
-    const institutions = [];
-    
-    for (const doc of snapshot.docs) {
-      const institution = doc.data();
-      
-      // Get course count
-      const coursesSnapshot = await db.collection('courses')
-        .where('institutionId', '==', doc.id)
-        .get();
-
-      // Get application count
-      const applicationsSnapshot = await db.collection('applications')
-        .where('institutionId', '==', doc.id)
-        .get();
-
-      institutions.push({
-        id: doc.id,
-        ...institution,
-        courseCount: coursesSnapshot.size,
-        applicationCount: applicationsSnapshot.size,
-        studentCount: new Set(applicationsSnapshot.docs.map(d => d.data().studentId)).size
-      });
-    }
-
-    res.json(institutions);
-  } catch (error) {
-    console.error('Error fetching institutions:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Update institution status
-router.put('/institutions/:institutionId/status', async (req, res) => {
-  try {
-    const { status } = req.body;
-
-    await db.collection('institutions').doc(req.params.institutionId).update({
-      status,
-      updatedAt: new Date().toISOString()
-    });
-
-    res.json({ success: true, message: 'Institution status updated successfully' });
-  } catch (error) {
-    console.error('Error updating institution status:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Delete institution
-router.delete('/institutions/:institutionId', async (req, res) => {
-  try {
-    await db.collection('institutions').doc(req.params.institutionId).delete();
-    res.json({ success: true, message: 'Institution deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting institution:', error);
     res.status(500).json({ error: error.message });
   }
 });
