@@ -2,65 +2,263 @@ const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
 const db = admin.firestore();
-const auth = require('../middleware/auth');
 
-const INSTITUTIONS_COLLECTION = 'institutions';
-
-// Apply auth middleware to all routes
-router.use(auth);
-
-// GET institution profile for current user
-router.get('/profile/me', async (req, res) => {
+// GET all institutes (for students - only approved ones)
+router.get('/', async (req, res) => {
   try {
-    const userId = req.user.uid;
+    const { status, forStudents } = req.query;
+    let query = db.collection('institutions'); // Use consistent collection name
+
+    // CRITICAL FIX: If forStudents=true, only show approved institutes
+    if (forStudents === 'true') {
+      query = query.where('status', '==', 'approved');
+    } else if (status) {
+      query = query.where('status', '==', status);
+    }
+
+    const snapshot = await query.orderBy('createdAt', 'desc').get();
+    const institutes = [];
     
-    const snapshot = await db.collection(INSTITUTIONS_COLLECTION)
-      .where('userId', '==', userId)
+    snapshot.forEach(doc => {
+      institutes.push({ 
+        id: doc.id, 
+        ...doc.data() 
+      });
+    });
+    
+    res.json(institutes);
+  } catch (error) {
+    console.error('Error fetching institutes:', error);
+    res.status(500).json({ error: 'Failed to fetch institutes' });
+  }
+});
+
+// GET single institute by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const doc = await db.collection('institutions').doc(req.params.id).get(); // Use consistent collection
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Institute not found' });
+    }
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (error) {
+    console.error('Error fetching institute:', error);
+    res.status(500).json({ error: 'Failed to fetch institute' });
+  }
+});
+
+// CREATE new institute
+router.post('/', async (req, res) => {
+  try {
+    const {
+      name,
+      type,
+      email,
+      phone,
+      location,
+      website,
+      established,
+      description,
+      userId
+    } = req.body;
+
+    // Use consistent collection name
+    const institutionData = {
+      name,
+      type,
+      email,
+      phone: phone || '',
+      location,
+      website: website || '',
+      established: established || '',
+      description: description || '',
+      userId: userId || '',
+      status: 'pending', // Always start as pending
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Let Firestore auto-generate ID for consistency
+    const docRef = await db.collection('institutions').add(institutionData);
+
+    res.status(201).json({ 
+      id: docRef.id,
+      ...institutionData,
+      message: 'Institute created successfully. Waiting for admin approval.' 
+    });
+  } catch (error) {
+    console.error('Error creating institute:', error);
+    res.status(500).json({ error: 'Failed to create institute' });
+  }
+});
+
+// UPDATE institute by ID
+router.put('/:id', async (req, res) => {
+  try {
+    const updateData = { 
+      ...req.body, 
+      updatedAt: new Date().toISOString() 
+    };
+    
+    await db.collection('institutions').doc(req.params.id).update(updateData); // Use consistent collection
+    
+    res.json({ message: 'Institute updated successfully' });
+  } catch (error) {
+    console.error('Error updating institute:', error);
+    res.status(500).json({ error: 'Failed to update institute' });
+  }
+});
+
+// DELETE institute by ID
+router.delete('/:id', async (req, res) => {
+  try {
+    await db.collection('institutions').doc(req.params.id).delete(); // Use consistent collection
+    res.json({ message: 'Institute deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting institute:', error);
+    res.status(500).json({ error: 'Failed to delete institute' });
+  }
+});
+
+// APPROVE institute
+router.post('/:id/approve', async (req, res) => {
+  try {
+    const instituteId = req.params.id;
+    
+    // Verify institute exists - use consistent collection
+    const instituteDoc = await db.collection('institutions').doc(instituteId).get();
+    if (!instituteDoc.exists) {
+      return res.status(404).json({ error: 'Institute not found' });
+    }
+
+    // Update status to approved
+    await db.collection('institutions').doc(instituteId).update({
+      status: 'approved',
+      approvedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    // Also update all courses from this institute to be visible
+    const coursesSnapshot = await db.collection('courses')
+      .where('institutionId', '==', instituteId)
+      .get();
+
+    const batch = db.batch();
+    coursesSnapshot.forEach(doc => {
+      batch.update(doc.ref, {
+        status: 'active', // Make courses active
+        updatedAt: new Date().toISOString()
+      });
+    });
+
+    if (coursesSnapshot.size > 0) {
+      await batch.commit();
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Institute approved successfully. Courses are now visible to students.',
+      coursesUpdated: coursesSnapshot.size
+    });
+  } catch (error) {
+    console.error('Error approving institute:', error);
+    res.status(500).json({ error: 'Failed to approve institute' });
+  }
+});
+
+// REJECT institute
+router.post('/:id/reject', async (req, res) => {
+  try {
+    const instituteId = req.params.id;
+    const { reason } = req.body;
+
+    await db.collection('institutions').doc(instituteId).update({
+      status: 'rejected',
+      rejectionReason: reason || '',
+      rejectedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({ 
+      success: true, 
+      message: 'Institute rejected successfully' 
+    });
+  } catch (error) {
+    console.error('Error rejecting institute:', error);
+    res.status(500).json({ error: 'Failed to reject institute' });
+  }
+});
+
+// GET institutes for students (only approved ones)
+router.get('/public/approved', async (req, res) => {
+  try {
+    const snapshot = await db.collection('institutions') // Use consistent collection
+      .where('status', '==', 'approved')
+      .orderBy('name')
+      .get();
+    
+    const institutes = [];
+    snapshot.forEach(doc => {
+      institutes.push({ id: doc.id, ...doc.data() });
+    });
+    
+    res.json(institutes);
+  } catch (error) {
+    console.error('Error fetching approved institutes:', error);
+    res.status(500).json({ error: 'Failed to fetch institutes' });
+  }
+});
+
+// ✅ CRITICAL: INSTITUTE DASHBOARD ENDPOINTS
+
+// Get institute profile for dashboard
+router.get('/profile', async (req, res) => {
+  try {
+    const snapshot = await db.collection('institutions')
+      .orderBy('createdAt', 'desc')
       .limit(1)
       .get();
     
     if (snapshot.empty) {
       return res.status(404).json({ 
-        error: 'Institution not found',
-        message: 'Please complete your institution registration.'
+        error: 'No institution profile found',
+        message: 'Please complete your institution registration first.'
       });
     }
 
-    const institutionDoc = snapshot.docs[0];
-    const institution = institutionDoc.data();
+    const instituteDoc = snapshot.docs[0];
+    const institute = instituteDoc.data();
 
     res.json({
-      id: institutionDoc.id,
-      ...institution
+      id: instituteDoc.id,
+      ...institute
     });
   } catch (error) {
-    console.error('Error fetching institution profile:', error);
-    res.status(500).json({ error: 'Failed to fetch institution profile' });
+    console.error('Error fetching institute profile:', error);
+    res.status(500).json({ error: 'Failed to fetch institute profile' });
   }
 });
 
-// GET institution stats for current user
-router.get('/stats/me', async (req, res) => {
+// Get institute stats for dashboard
+router.get('/stats', async (req, res) => {
   try {
-    const userId = req.user.uid;
-    
-    const snapshot = await db.collection(INSTITUTIONS_COLLECTION)
-      .where('userId', '==', userId)
+    const snapshot = await db.collection('institutions')
+      .orderBy('createdAt', 'desc')
       .limit(1)
       .get();
     
     if (snapshot.empty) {
-      return res.status(404).json({ error: 'Institution not found' });
+      return res.status(404).json({ error: 'No institution found' });
     }
 
-    const institutionId = snapshot.docs[0].id;
+    const instituteId = snapshot.docs[0].id;
 
     const coursesSnapshot = await db.collection('courses')
-      .where('institutionId', '==', institutionId)
+      .where('institutionId', '==', instituteId)
       .get();
 
     const applicationsSnapshot = await db.collection('applications')
-      .where('institutionId', '==', institutionId)
+      .where('institutionId', '==', instituteId)
       .get();
 
     const studentIds = new Set();
@@ -82,29 +280,27 @@ router.get('/stats/me', async (req, res) => {
 
     res.json(stats);
   } catch (error) {
-    console.error('Error fetching institution stats:', error);
-    res.status(500).json({ error: 'Failed to fetch institution stats' });
+    console.error('Error fetching institute stats:', error);
+    res.status(500).json({ error: 'Failed to fetch institute stats' });
   }
 });
 
-// GET institution courses for current user
-router.get('/courses/me', async (req, res) => {
+// Get institute courses for dashboard
+router.get('/courses', async (req, res) => {
   try {
-    const userId = req.user.uid;
-    
-    const snapshot = await db.collection(INSTITUTIONS_COLLECTION)
-      .where('userId', '==', userId)
+    const snapshot = await db.collection('institutions')
+      .orderBy('createdAt', 'desc')
       .limit(1)
       .get();
     
     if (snapshot.empty) {
-      return res.status(404).json({ error: 'Institution not found' });
+      return res.status(404).json({ error: 'No institution found' });
     }
 
-    const institutionId = snapshot.docs[0].id;
+    const instituteId = snapshot.docs[0].id;
 
     const coursesSnapshot = await db.collection('courses')
-      .where('institutionId', '==', institutionId)
+      .where('institutionId', '==', instituteId)
       .get();
 
     const courses = [];
@@ -117,179 +313,18 @@ router.get('/courses/me', async (req, res) => {
 
     res.json(courses);
   } catch (error) {
-    console.error('Error fetching institution courses:', error);
+    console.error('Error fetching institute courses:', error);
     res.status(500).json({ error: 'Failed to fetch courses' });
   }
 });
 
-// CREATE new institution
-router.post('/', async (req, res) => {
-  try {
-    const userId = req.user.uid;
-    const {
-      name,
-      type,
-      email,
-      phone,
-      location,
-      website,
-      established,
-      description
-    } = req.body;
-
-    if (!name || !email || !type || !location) {
-      return res.status(400).json({ 
-        error: 'Missing required fields',
-        required: ['name', 'email', 'type', 'location']
-      });
-    }
-
-    const existingSnapshot = await db.collection(INSTITUTIONS_COLLECTION)
-      .where('email', '==', email)
-      .limit(1)
-      .get();
-
-    if (!existingSnapshot.empty) {
-      return res.status(400).json({ 
-        error: 'Institution with this email already exists' 
-      });
-    }
-
-    const institutionData = {
-      name,
-      type,
-      email,
-      phone: phone || '',
-      location,
-      website: website || '',
-      established: established || '',
-      description: description || '',
-      userId,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    const docRef = await db.collection(INSTITUTIONS_COLLECTION).add(institutionData);
-
-    res.status(201).json({
-      success: true,
-      id: docRef.id,
-      message: 'Institution registered successfully. Waiting for admin approval.',
-      status: 'pending'
-    });
-  } catch (error) {
-    console.error('Error creating institution:', error);
-    res.status(500).json({ error: 'Failed to create institution' });
-  }
-});
-
-// GET all institutions (admin only)
-router.get('/', async (req, res) => {
-  try {
-    const { status, forStudents } = req.query;
-    let query = db.collection(INSTITUTIONS_COLLECTION);
-
-    if (forStudents === 'true') {
-      query = query.where('status', '==', 'approved');
-    } else if (status) {
-      query = query.where('status', '==', status);
-    }
-
-    const snapshot = await query.orderBy('createdAt', 'desc').get();
-    const institutions = [];
-    
-    for (const doc of snapshot.docs) {
-      const institution = doc.data();
-      
-      const coursesSnapshot = await db.collection('courses')
-        .where('institutionId', '==', doc.id)
-        .get();
-
-      const applicationsSnapshot = await db.collection('applications')
-        .where('institutionId', '==', doc.id)
-        .get();
-
-      institutions.push({
-        id: doc.id,
-        ...institution,
-        courseCount: coursesSnapshot.size,
-        applicationCount: applicationsSnapshot.size,
-        studentCount: new Set(applicationsSnapshot.docs.map(d => d.data().studentId)).size
-      });
-    }
-    
-    res.json(institutions);
-  } catch (error) {
-    console.error('Error fetching institutions:', error);
-    res.status(500).json({ error: 'Failed to fetch institutions' });
-  }
-});
-
-// APPROVE institution (admin only)
-router.post('/:id/approve', async (req, res) => {
-  try {
-    const institutionId = req.params.id;
-    
-    const institutionDoc = await db.collection(INSTITUTIONS_COLLECTION).doc(institutionId).get();
-    if (!institutionDoc.exists) {
-      return res.status(404).json({ error: 'Institution not found' });
-    }
-
-    await db.collection(INSTITUTIONS_COLLECTION).doc(institutionId).update({
-      status: 'approved',
-      approvedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-
-    const coursesSnapshot = await db.collection('courses')
-      .where('institutionId', '==', institutionId)
-      .get();
-
-    const batch = db.batch();
-    coursesSnapshot.forEach(doc => {
-      batch.update(doc.ref, {
-        status: 'active',
-        updatedAt: new Date().toISOString()
-      });
-    });
-
-    if (coursesSnapshot.size > 0) {
-      await batch.commit();
-    }
-
-    res.json({ 
-      success: true, 
-      message: 'Institution approved successfully.',
-      coursesUpdated: coursesSnapshot.size
-    });
-  } catch (error) {
-    console.error('Error approving institution:', error);
-    res.status(500).json({ error: 'Failed to approve institution' });
-  }
-});
-
-// REJECT institution (admin only)
-router.post('/:id/reject', async (req, res) => {
-  try {
-    const institutionId = req.params.id;
-    const { reason } = req.body;
-
-    await db.collection(INSTITUTIONS_COLLECTION).doc(institutionId).update({
-      status: 'rejected',
-      rejectionReason: reason || '',
-      rejectedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-
-    res.json({ 
-      success: true, 
-      message: 'Institution rejected successfully' 
-    });
-  } catch (error) {
-    console.error('Error rejecting institution:', error);
-    res.status(500).json({ error: 'Failed to reject institution' });
-  }
+// Health check for institute routes
+router.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'Institute routes are working',
+    timestamp: new Date().toISOString()
+  });
 });
 
 module.exports = router;
