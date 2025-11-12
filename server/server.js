@@ -68,19 +68,49 @@ app.use((req, res, next) => {
   next();
 });
 
+// ✅ AUTH MIDDLEWARE
+const auth = async (req, res, next) => {
+  try {
+    // Skip auth for public routes
+    if (req.path === '/health' || req.path.startsWith('/public')) {
+      return next();
+    }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    
+    if (!token) {
+      return res.status(401).json({ error: 'Invalid token format' });
+    }
+
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.error('Auth error:', error);
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+};
+
 // Serve static files from React build
 app.use(express.static(path.join(__dirname, '../client/build')));
 
-// API Routes
+// Public Routes
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/students', require('./routes/students'));
-app.use('/api/institutes', require('./routes/institutes'));
-app.use('/api/companies', require('./routes/companies'));
-app.use('/api/admin', require('./routes/admin'));
-app.use('/api/applications', require('./routes/applications'));
-app.use('/api/jobs', require('./routes/jobs'));
 
-// Health check endpoint
+// Protected Routes (with auth middleware)
+app.use('/api/students', auth, require('./routes/students'));
+app.use('/api/institutes', auth, require('./routes/institutes'));
+app.use('/api/companies', auth, require('./routes/companies'));
+app.use('/api/admin', auth, require('./routes/admin'));
+app.use('/api/applications', auth, require('./routes/applications'));
+app.use('/api/jobs', auth, require('./routes/jobs'));
+
+// Health check endpoint (public)
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
