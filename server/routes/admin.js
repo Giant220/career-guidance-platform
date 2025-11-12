@@ -53,7 +53,7 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// Get recent activity - FIXED: Show pending status clearly
+// Get recent activity
 router.get('/activity', async (req, res) => {
   try {
     const recentActivity = [];
@@ -75,7 +75,7 @@ router.get('/activity', async (req, res) => {
       });
     });
 
-    // Get recent institutions - FIXED: Show pending status
+    // Get recent institutions
     const institutionsSnapshot = await db.collection('institutions')
       .orderBy('createdAt', 'desc')
       .limit(5)
@@ -112,7 +112,7 @@ router.get('/activity', async (req, res) => {
       });
     });
 
-    // Sort by priority first (pending items first), then by timestamp
+    // Sort by priority first, then by timestamp
     recentActivity.sort((a, b) => {
       if (a.priority !== b.priority) {
         return a.priority - b.priority;
@@ -159,12 +159,10 @@ router.get('/institutions', async (req, res) => {
     for (const doc of snapshot.docs) {
       const institution = doc.data();
       
-      // Get course count
       const coursesSnapshot = await db.collection('courses')
         .where('institutionId', '==', doc.id)
         .get();
 
-      // Get application count
       const applicationsSnapshot = await db.collection('applications')
         .where('institutionId', '==', doc.id)
         .get();
@@ -195,6 +193,8 @@ router.post('/institutions/:institutionId/approve', async (req, res) => {
     if (!institutionDoc.exists) {
       return res.status(404).json({ error: 'Institution not found' });
     }
+
+    const institution = institutionDoc.data();
 
     // Update institution status to approved
     await institutionRef.update({
@@ -243,7 +243,6 @@ router.post('/institutions/:institutionId/reject', async (req, res) => {
       return res.status(404).json({ error: 'Institution not found' });
     }
 
-    // Update institution status to rejected
     await institutionRef.update({
       status: 'rejected',
       rejectionReason: reason || 'No reason provided',
@@ -251,7 +250,6 @@ router.post('/institutions/:institutionId/reject', async (req, res) => {
       updatedAt: new Date().toISOString()
     });
 
-    // Hide all courses for this institution
     const coursesSnapshot = await db.collection('courses')
       .where('institutionId', '==', institutionId)
       .get();
@@ -278,7 +276,7 @@ router.post('/institutions/:institutionId/reject', async (req, res) => {
   }
 });
 
-// Update institution status (for suspend/reactivate)
+// Update institution status
 router.put('/institutions/:institutionId/status', async (req, res) => {
   try {
     const { status } = req.body;
@@ -289,7 +287,6 @@ router.put('/institutions/:institutionId/status', async (req, res) => {
       updatedAt: new Date().toISOString()
     });
 
-    // Update course visibility based on status
     const coursesSnapshot = await db.collection('courses')
       .where('institutionId', '==', institutionId)
       .get();
@@ -322,7 +319,6 @@ router.delete('/institutions/:institutionId', async (req, res) => {
   try {
     const institutionId = req.params.institutionId;
 
-    // Delete all courses for this institution
     const coursesSnapshot = await db.collection('courses')
       .where('institutionId', '==', institutionId)
       .get();
@@ -342,6 +338,130 @@ router.delete('/institutions/:institutionId', async (req, res) => {
     });
   } catch (error) {
     console.error('Error deleting institution:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all companies
+router.get('/companies', async (req, res) => {
+  try {
+    const snapshot = await db.collection('companies').get();
+    const companies = [];
+    
+    for (const doc of snapshot.docs) {
+      const company = doc.data();
+      
+      // Get job count
+      const jobsSnapshot = await db.collection('jobs')
+        .where('companyId', '==', doc.id)
+        .get();
+
+      // Get application count
+      const applicationsSnapshot = await db.collection('jobApplications')
+        .where('companyId', '==', doc.id)
+        .get();
+
+      companies.push({
+        id: doc.id,
+        ...company,
+        jobCount: jobsSnapshot.size,
+        applicationCount: applicationsSnapshot.size
+      });
+    }
+
+    res.json(companies);
+  } catch (error) {
+    console.error('Error fetching companies:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update company status
+router.put('/companies/:companyId/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    await db.collection('companies').doc(req.params.companyId).update({
+      status,
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({ success: true, message: 'Company status updated successfully' });
+  } catch (error) {
+    console.error('Error updating company status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete company
+router.delete('/companies/:companyId', async (req, res) => {
+  try {
+    await db.collection('companies').doc(req.params.companyId).delete();
+    res.json({ success: true, message: 'Company deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting company:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all users
+router.get('/users', async (req, res) => {
+  try {
+    const snapshot = await db.collection('users').get();
+    const users = [];
+    
+    snapshot.forEach(doc => {
+      users.push({ id: doc.id, ...doc.data() });
+    });
+
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update user status
+router.put('/users/:userId/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    await db.collection('users').doc(req.params.userId).update({
+      status,
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({ success: true, message: 'User status updated successfully' });
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update user role
+router.put('/users/:userId/role', async (req, res) => {
+  try {
+    const { role } = req.body;
+
+    await db.collection('users').doc(req.params.userId).update({
+      role,
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({ success: true, message: 'User role updated successfully' });
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete user
+router.delete('/users/:userId', async (req, res) => {
+  try {
+    await db.collection('users').doc(req.params.userId).delete();
+    res.json({ success: true, message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
     res.status(500).json({ error: error.message });
   }
 });
