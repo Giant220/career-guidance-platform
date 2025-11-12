@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 
-const InstituteProfile = ({ institute, onInstituteUpdate }) => {
+const InstituteProfile = ({ institute, onInstituteUpdate, onRefresh }) => {
   const { currentUser } = useAuth();
   const [profile, setProfile] = useState({
     name: '',
@@ -67,7 +67,6 @@ const InstituteProfile = ({ institute, onInstituteUpdate }) => {
     setSaving(true);
     try {
       const token = await currentUser.getIdToken();
-      console.log('Saving institute profile with token...');
       
       let response;
       let url;
@@ -86,9 +85,6 @@ const InstituteProfile = ({ institute, onInstituteUpdate }) => {
         userId: currentUser.uid
       };
 
-      console.log('Making request to:', url, 'with method:', method);
-      console.log('Request body:', requestBody);
-
       response = await fetch(url, {
         method: method,
         headers: {
@@ -98,11 +94,8 @@ const InstituteProfile = ({ institute, onInstituteUpdate }) => {
         body: JSON.stringify(requestBody)
       });
 
-      console.log('Response status:', response.status);
-
       if (response.ok) {
         const result = await response.json();
-        console.log('Save successful:', result);
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
         
@@ -115,7 +108,6 @@ const InstituteProfile = ({ institute, onInstituteUpdate }) => {
         }
       } else {
         const errorText = await response.text();
-        console.error('Server response error:', errorText);
         throw new Error(`Failed to save profile: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
@@ -128,8 +120,17 @@ const InstituteProfile = ({ institute, onInstituteUpdate }) => {
 
   return (
     <div className="section">
-      <h1>Institute Profile</h1>
-      <p>Manage your institution information and contact details</p>
+      <div className="flex-between">
+        <div>
+          <h1>Institute Profile</h1>
+          <p>Manage your institution information and contact details</p>
+        </div>
+        {onRefresh && (
+          <button onClick={onRefresh} className="btn btn-secondary">
+            Refresh Status
+          </button>
+        )}
+      </div>
 
       <div className="form-container">
         <form onSubmit={handleSubmit} className="form">
@@ -279,6 +280,12 @@ const InstituteProfile = ({ institute, onInstituteUpdate }) => {
               <strong>Registration Date:</strong>
               <span>{institute.createdAt ? new Date(institute.createdAt).toLocaleDateString() : 'N/A'}</span>
             </div>
+            {institute.approvedAt && (
+              <div className="info-item">
+                <strong>Approved Date:</strong>
+                <span>{new Date(institute.approvedAt).toLocaleDateString()}</span>
+              </div>
+            )}
           </div>
         </div>
       )}
