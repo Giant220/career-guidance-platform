@@ -1,48 +1,11 @@
-console.log('✅ institutes.js loaded on Render deployment');
-
 const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
 const db = admin.firestore();
 
-// Test route to verify institutes routes are working
-router.get('/render-test', (req, res) => {
-  console.log('✅ /api/institutes/render-test route hit on Render');
-  res.json({ 
-    message: 'Institute routes are working on Render!',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
-  });
-});
-
-// Debug route to check user institute relationship
-router.get('/debug-auth', async (req, res) => {
-  try {
-    console.log('🔍 /api/institutes/debug-auth hit on Render');
-    console.log('🔍 User from auth:', req.user);
-    
-    if (!req.user) {
-      return res.status(401).json({ error: 'No user in request - auth middleware issue' });
-    }
-
-    res.json({ 
-      user: {
-        uid: req.user.uid,
-        email: req.user.email
-      },
-      message: 'Auth is working on Render',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('❌ Debug auth error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // GET all institutes (for students - only approved ones)
 router.get('/', async (req, res) => {
   try {
-    console.log('🔄 GET /api/institutes on Render');
     const { status, forStudents } = req.query;
     let query = db.collection('institutes');
 
@@ -62,10 +25,9 @@ router.get('/', async (req, res) => {
       });
     });
     
-    console.log(`✅ Found ${institutes.length} institutes on Render`);
     res.json(institutes);
   } catch (error) {
-    console.error('❌ Error fetching institutes on Render:', error);
+    console.error('Error fetching institutes:', error);
     res.status(500).json({ error: 'Failed to fetch institutes' });
   }
 });
@@ -73,14 +35,13 @@ router.get('/', async (req, res) => {
 // GET single institute by ID
 router.get('/:id', async (req, res) => {
   try {
-    console.log(`🔄 GET /api/institutes/${req.params.id} on Render`);
     const doc = await db.collection('institutes').doc(req.params.id).get();
     if (!doc.exists) {
       return res.status(404).json({ error: 'Institute not found' });
     }
     res.json({ id: doc.id, ...doc.data() });
   } catch (error) {
-    console.error('❌ Error fetching institute on Render:', error);
+    console.error('Error fetching institute:', error);
     res.status(500).json({ error: 'Failed to fetch institute' });
   }
 });
@@ -88,7 +49,6 @@ router.get('/:id', async (req, res) => {
 // CREATE new institute
 router.post('/', async (req, res) => {
   try {
-    console.log('🔄 POST /api/institutes on Render');
     const {
       name,
       type,
@@ -124,7 +84,7 @@ router.post('/', async (req, res) => {
       message: 'Institute created successfully. Waiting for admin approval.' 
     });
   } catch (error) {
-    console.error('❌ Error creating institute on Render:', error);
+    console.error('Error creating institute:', error);
     res.status(500).json({ error: 'Failed to create institute' });
   }
 });
@@ -132,7 +92,6 @@ router.post('/', async (req, res) => {
 // UPDATE institute by ID
 router.put('/:id', async (req, res) => {
   try {
-    console.log(`🔄 PUT /api/institutes/${req.params.id} on Render`);
     const updateData = { 
       ...req.body, 
       updatedAt: new Date().toISOString() 
@@ -142,7 +101,7 @@ router.put('/:id', async (req, res) => {
     
     res.json({ message: 'Institute updated successfully' });
   } catch (error) {
-    console.error('❌ Error updating institute on Render:', error);
+    console.error('Error updating institute:', error);
     res.status(500).json({ error: 'Failed to update institute' });
   }
 });
@@ -150,11 +109,10 @@ router.put('/:id', async (req, res) => {
 // DELETE institute by ID
 router.delete('/:id', async (req, res) => {
   try {
-    console.log(`🔄 DELETE /api/institutes/${req.params.id} on Render`);
     await db.collection('institutes').doc(req.params.id).delete();
     res.json({ message: 'Institute deleted successfully' });
   } catch (error) {
-    console.error('❌ Error deleting institute on Render:', error);
+    console.error('Error deleting institute:', error);
     res.status(500).json({ error: 'Failed to delete institute' });
   }
 });
@@ -162,7 +120,6 @@ router.delete('/:id', async (req, res) => {
 // APPROVE institute
 router.post('/:id/approve', async (req, res) => {
   try {
-    console.log(`🔄 POST /api/institutes/${req.params.id}/approve on Render`);
     const instituteId = req.params.id;
     
     const instituteDoc = await db.collection('institutes').doc(instituteId).get();
@@ -198,7 +155,7 @@ router.post('/:id/approve', async (req, res) => {
       coursesUpdated: coursesSnapshot.size
     });
   } catch (error) {
-    console.error('❌ Error approving institute on Render:', error);
+    console.error('Error approving institute:', error);
     res.status(500).json({ error: 'Failed to approve institute' });
   }
 });
@@ -206,7 +163,6 @@ router.post('/:id/approve', async (req, res) => {
 // REJECT institute
 router.post('/:id/reject', async (req, res) => {
   try {
-    console.log(`🔄 POST /api/institutes/${req.params.id}/reject on Render`);
     const instituteId = req.params.id;
     const { reason } = req.body;
 
@@ -222,7 +178,7 @@ router.post('/:id/reject', async (req, res) => {
       message: 'Institute rejected successfully' 
     });
   } catch (error) {
-    console.error('❌ Error rejecting institute on Render:', error);
+    console.error('Error rejecting institute:', error);
     res.status(500).json({ error: 'Failed to reject institute' });
   }
 });
@@ -230,7 +186,6 @@ router.post('/:id/reject', async (req, res) => {
 // GET institutes for students (only approved ones)
 router.get('/public/approved', async (req, res) => {
   try {
-    console.log('🔄 GET /api/institutes/public/approved on Render');
     const snapshot = await db.collection('institutes')
       .where('status', '==', 'approved')
       .orderBy('name')
@@ -243,144 +198,9 @@ router.get('/public/approved', async (req, res) => {
     
     res.json(institutes);
   } catch (error) {
-    console.error('❌ Error fetching approved institutes on Render:', error);
+    console.error('Error fetching approved institutes:', error);
     res.status(500).json({ error: 'Failed to fetch institutes' });
   }
 });
-
-// ✅ CRITICAL: Get current user's institute profile
-router.get('/profile/me', async (req, res) => {
-  try {
-    console.log('🔄 GET /api/institutes/profile/me on Render');
-    console.log('🔍 User ID:', req.user?.uid);
-    console.log('🔍 User email:', req.user?.email);
-    
-    const userId = req.user.uid;
-    
-    const snapshot = await db.collection('institutes')
-      .where('userId', '==', userId)
-      .limit(1)
-      .get();
-    
-    console.log('🔍 Found institutes for user:', snapshot.size);
-    
-    if (snapshot.empty) {
-      console.log('❌ No institute found for user:', userId);
-      return res.status(404).json({ 
-        error: 'No institute profile found',
-        message: 'Please complete your institution registration first.'
-      });
-    }
-
-    const instituteDoc = snapshot.docs[0];
-    const institute = instituteDoc.data();
-    
-    console.log('✅ Found institute:', instituteDoc.id);
-    
-    res.json({
-      id: instituteDoc.id,
-      ...institute
-    });
-  } catch (error) {
-    console.error('❌ Error fetching institute profile on Render:', error);
-    res.status(500).json({ error: 'Failed to fetch institute profile' });
-  }
-});
-
-// ✅ CRITICAL: Get current user's institute stats
-router.get('/stats/me', async (req, res) => {
-  try {
-    console.log('🔄 GET /api/institutes/stats/me on Render');
-    const userId = req.user.uid;
-    
-    const snapshot = await db.collection('institutes')
-      .where('userId', '==', userId)
-      .limit(1)
-      .get();
-    
-    if (snapshot.empty) {
-      return res.status(404).json({ error: 'No institute found' });
-    }
-
-    const instituteId = snapshot.docs[0].id;
-
-    // Get courses count
-    const coursesSnapshot = await db.collection('courses')
-      .where('institutionId', '==', instituteId)
-      .get();
-
-    // Get applications count
-    const applicationsSnapshot = await db.collection('applications')
-      .where('institutionId', '==', instituteId)
-      .get();
-
-    // Get unique students
-    const studentIds = new Set();
-    applicationsSnapshot.forEach(doc => {
-      const application = doc.data();
-      if (application.studentId) {
-        studentIds.add(application.studentId);
-      }
-    });
-
-    const stats = {
-      totalCourses: coursesSnapshot.size,
-      totalApplications: applicationsSnapshot.size,
-      totalStudents: studentIds.size,
-      pendingApplications: applicationsSnapshot.docs.filter(doc => 
-        doc.data().status === 'pending'
-      ).length,
-      admissionRate: applicationsSnapshot.size > 0 ? 
-        Math.round((applicationsSnapshot.docs.filter(doc => 
-          doc.data().status === 'approved'
-        ).length / applicationsSnapshot.size) * 100) : 0
-    };
-
-    console.log('✅ Stats calculated for institute:', instituteId);
-    res.json(stats);
-  } catch (error) {
-    console.error('❌ Error fetching institute stats on Render:', error);
-    res.status(500).json({ error: 'Failed to fetch institute stats' });
-  }
-});
-
-// ✅ CRITICAL: Get current user's institute courses
-router.get('/courses/me', async (req, res) => {
-  try {
-    console.log('🔄 GET /api/institutes/courses/me on Render');
-    const userId = req.user.uid;
-    
-    const snapshot = await db.collection('institutes')
-      .where('userId', '==', userId)
-      .limit(1)
-      .get();
-    
-    if (snapshot.empty) {
-      return res.status(404).json({ error: 'No institute found' });
-    }
-
-    const instituteId = snapshot.docs[0].id;
-
-    const coursesSnapshot = await db.collection('courses')
-      .where('institutionId', '==', instituteId)
-      .get();
-
-    const courses = [];
-    coursesSnapshot.forEach(doc => {
-      courses.push({
-        id: doc.id,
-        ...doc.data()
-      });
-    });
-
-    console.log(`✅ Found ${courses.length} courses for institute`);
-    res.json(courses);
-  } catch (error) {
-    console.error('❌ Error fetching institute courses on Render:', error);
-    res.status(500).json({ error: 'Failed to fetch courses' });
-  }
-});
-
-console.log('✅ All institute routes registered on Render');
 
 module.exports = router;
