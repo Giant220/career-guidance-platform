@@ -65,20 +65,94 @@ const AdminHome = ({ currentUser }) => {
   });
 
   const [recentActivity, setRecentActivity] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Set default stats - no API calls to avoid errors
-    setStats({
-      totalUsers: 0,
-      totalInstitutions: 0,
-      totalCompanies: 0,
-      pendingApprovals: 0,
-      activeApplications: 0,
-      systemHealth: 100
-    });
-    setRecentActivity([]);
-  }, []);
+    if (currentUser) {
+      fetchAdminData();
+    }
+  }, [currentUser]);
+
+  const fetchAdminData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (!currentUser) {
+        throw new Error('No user logged in');
+      }
+
+      const token = await currentUser.getIdToken();
+      
+      // Fetch stats
+      const statsResponse = await fetch('/api/admin/stats', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (!statsResponse.ok) {
+        throw new Error(`Failed to fetch stats: ${statsResponse.status}`);
+      }
+
+      const statsData = await statsResponse.json();
+      setStats(statsData);
+
+      // Fetch recent activity
+      const activityResponse = await fetch('/api/admin/activity', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (activityResponse.ok) {
+        const activityData = await activityResponse.json();
+        setRecentActivity(Array.isArray(activityData) ? activityData : []);
+      } else {
+        // If activity fails, just set empty array
+        setRecentActivity([]);
+      }
+
+    } catch (error) {
+      console.error('Error fetching admin data:', error);
+      setError(error.message);
+      // Set safe defaults on error
+      setStats({
+        totalUsers: 0,
+        totalInstitutions: 0,
+        totalCompanies: 0,
+        pendingApprovals: 0,
+        activeApplications: 0,
+        systemHealth: 100
+      });
+      setRecentActivity([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="admin-home">
+        <div className="section">
+          <div className="admin-header">
+            <h1>System Administration</h1>
+            <p>Loading dashboard data...</p>
+          </div>
+          <div className="loading">Loading system statistics...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-home">
@@ -87,6 +161,15 @@ const AdminHome = ({ currentUser }) => {
           <h1>System Administration</h1>
           <p>Welcome back, Administrator. Manage the Career Bridge platform.</p>
         </div>
+
+        {error && (
+          <div className="error-message">
+            <p>⚠️ {error}</p>
+            <button onClick={fetchAdminData} className="btn btn-primary">
+              Retry
+            </button>
+          </div>
+        )}
 
         <div className="dashboard-top">
           <div className="card">
