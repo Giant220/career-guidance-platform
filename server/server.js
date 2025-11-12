@@ -5,7 +5,7 @@ const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 require('dotenv').config();
 
-// Initialize Firebase Admin WITH ERROR HANDLING
+// Initialize Firebase Admin
 let admin;
 let db;
 
@@ -22,56 +22,12 @@ try {
     
 } catch (error) {
   console.error('💥 CRITICAL: Firebase Admin initialization failed:', error);
-  console.error('This will break all database operations!');
-  
-  // Create mock db to prevent crashes but log all errors
-  db = {
-    collection: (name) => ({
-      doc: (id) => ({
-        get: () => {
-          console.error(`❌ Firebase not initialized - attempted to get doc: ${name}/${id}`);
-          return Promise.reject(new Error('Firebase not initialized'));
-        },
-        set: (data) => {
-          console.error(`❌ Firebase not initialized - attempted to set doc: ${name}/${id}`);
-          return Promise.reject(new Error('Firebase not initialized'));
-        },
-        update: (data) => {
-          console.error(`❌ Firebase not initialized - attempted to update doc: ${name}/${id}`);
-          return Promise.reject(new Error('Firebase not initialized'));
-        },
-        delete: () => {
-          console.error(`❌ Firebase not initialized - attempted to delete doc: ${name}/${id}`);
-          return Promise.reject(new Error('Firebase not initialized'));
-        }
-      }),
-      where: () => ({
-        get: () => {
-          console.error(`❌ Firebase not initialized - attempted to query collection: ${name}`);
-          return Promise.reject(new Error('Firebase not initialized'));
-        },
-        orderBy: () => ({
-          get: () => {
-            console.error(`❌ Firebase not initialized - attempted to query collection: ${name}`);
-            return Promise.reject(new Error('Firebase not initialized'));
-          }
-        })
-      }),
-      get: () => {
-        console.error(`❌ Firebase not initialized - attempted to get collection: ${name}`);
-        return Promise.reject(new Error('Firebase not initialized'));
-      },
-      add: (data) => {
-        console.error(`❌ Firebase not initialized - attempted to add to collection: ${name}`);
-        return Promise.reject(new Error('Firebase not initialized'));
-      }
-    })
-  };
+  process.exit(1);
 }
 
 const app = express();
 
-// Security Middleware - Public access friendly
+// Security Middleware
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
   contentSecurityPolicy: {
@@ -96,8 +52,8 @@ app.use(helmet({
 app.set('trust proxy', 1);
 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100
 });
 app.use(limiter);
 
@@ -130,7 +86,7 @@ app.get('/api/health', (req, res) => {
     status: 'OK', 
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
-    firebase: db ? 'Firebase connected' : 'Firebase failed'
+    firebase: 'connected'
   });
 });
 
