@@ -124,9 +124,6 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/applications', require('./routes/applications'));
 app.use('/api/jobs', require('./routes/jobs'));
 
-// ✅ CRITICAL FIX: Add the missing institute dashboard routes
-app.use('/api/institute', require('./routes/institute'));
-
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ 
