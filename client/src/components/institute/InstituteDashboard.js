@@ -14,49 +14,64 @@ const InstituteDashboard = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchUserInstitute = async () => {
-      if (!currentUser) {
-        setLoading(false);
-        return;
-      }
+  const fetchUserInstitute = async () => {
+    if (!currentUser) {
+      setLoading(false);
+      return;
+    }
 
-      try {
-        const token = await currentUser.getIdToken();
-        console.log('Fetching institutes with token...');
-        
-        const response = await fetch('/api/institutes', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        console.log('Response status:', response.status);
-        
-        if (response.ok) {
-          const allInstitutes = await response.json();
-          console.log('All institutes:', allInstitutes);
-          
-          // Find institute that belongs to current user
-          const userInstitute = allInstitutes.find(inst => 
-            inst.userId === currentUser.uid
-          );
-          console.log('User institute found:', userInstitute);
-          setInstitute(userInstitute || null);
-        } else {
-          console.error('Failed to fetch institutes:', response.status);
+    try {
+      const token = await currentUser.getIdToken();
+      console.log('Fetching institutes with token...');
+      
+      const response = await fetch('/api/institutes', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
-      } catch (error) {
-        console.error('Error fetching institutes:', error);
-        setInstitute(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+      });
 
+      console.log('Response status:', response.status);
+      
+      if (response.ok) {
+        const allInstitutes = await response.json();
+        console.log('All institutes:', allInstitutes);
+        
+        // Find institute that belongs to current user
+        const userInstitute = allInstitutes.find(inst => 
+          inst.userId === currentUser.uid
+        );
+        console.log('User institute found:', userInstitute);
+        setInstitute(userInstitute || null);
+      } else {
+        console.error('Failed to fetch institutes:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching institutes:', error);
+      setInstitute(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchUserInstitute();
-  }, [currentUser]);
+
+    // Set up polling to check for status updates every 30 seconds
+    const intervalId = setInterval(() => {
+      if (institute?.status === 'pending') {
+        console.log('Polling for institute status update...');
+        fetchUserInstitute();
+      }
+    }, 30000); // Check every 30 seconds
+
+    return () => clearInterval(intervalId);
+  }, [currentUser, institute?.status]); // Re-run when status changes
+
+  // Also add a manual refresh function
+  const refreshInstituteData = () => {
+    fetchUserInstitute();
+  };
 
   const handleLogout = async () => {
     try {
@@ -103,19 +118,56 @@ const InstituteDashboard = () => {
 
       <div className="main-content">
         <Routes>
-          <Route path="/" element={<InstituteHome institute={institute} currentUser={currentUser} />} />
-          <Route path="/profile" element={<InstituteProfile institute={institute} currentUser={currentUser} onInstituteUpdate={updateInstitute} />} />
-          <Route path="/courses" element={<ManageCourses institute={institute} currentUser={currentUser} />} />
-          <Route path="/applications" element={<ViewApplications institute={institute} currentUser={currentUser} />} />
-          <Route path="/admissions" element={<AdmissionsManagement institute={institute} currentUser={currentUser} />} />
-          <Route path="/reports" element={<InstituteReports institute={institute} currentUser={currentUser} />} />
+          <Route path="/" element={
+            <InstituteHome 
+              institute={institute} 
+              currentUser={currentUser} 
+              onRefresh={refreshInstituteData} 
+            />
+          } />
+          <Route path="/profile" element={
+            <InstituteProfile 
+              institute={institute} 
+              currentUser={currentUser} 
+              onInstituteUpdate={updateInstitute} 
+              onRefresh={refreshInstituteData}
+            />
+          } />
+          <Route path="/courses" element={
+            <ManageCourses 
+              institute={institute} 
+              currentUser={currentUser} 
+              onRefresh={refreshInstituteData}
+            />
+          } />
+          <Route path="/applications" element={
+            <ViewApplications 
+              institute={institute} 
+              currentUser={currentUser} 
+              onRefresh={refreshInstituteData}
+            />
+          } />
+          <Route path="/admissions" element={
+            <AdmissionsManagement 
+              institute={institute} 
+              currentUser={currentUser} 
+              onRefresh={refreshInstituteData}
+            />
+          } />
+          <Route path="/reports" element={
+            <InstituteReports 
+              institute={institute} 
+              currentUser={currentUser} 
+              onRefresh={refreshInstituteData}
+            />
+          } />
         </Routes>
       </div>
     </div>
   );
 };
 
-const InstituteHome = ({ institute, currentUser }) => {
+const InstituteHome = ({ institute, currentUser, onRefresh }) => {
   if (!institute) {
     return (
       <div className="institute-home">
@@ -195,8 +247,15 @@ const InstituteHome = ({ institute, currentUser }) => {
     <div className="institute-home">
       <div className="section">
         <div className="institute-header">
-          <h1>Welcome, {institute?.name || 'Institute'}</h1>
-          <p>{institute?.description || 'Manage your institution and student applications'}</p>
+          <div className="flex-between">
+            <div>
+              <h1>Welcome, {institute?.name || 'Institute'}</h1>
+              <p>{institute?.description || 'Manage your institution and student applications'}</p>
+            </div>
+            <button onClick={onRefresh} className="btn btn-secondary">
+              Refresh Status
+            </button>
+          </div>
           <div className={`status-badge status-${institute?.status || 'pending'}`}>
             {institute?.status ? institute.status.charAt(0).toUpperCase() + institute.status.slice(1) : 'Pending Approval'}
           </div>
@@ -235,30 +294,46 @@ const InstituteHome = ({ institute, currentUser }) => {
           <div className="card quick-action-card">
             <h3>Manage Courses</h3>
             <p>Add or update your course offerings</p>
-            <Link to="/institute/courses" className="btn">Manage Courses</Link>
+            <Link to="/institute/courses" className={institute?.status === 'approved' ? 'btn' : 'btn btn-disabled'}>
+              Manage Courses
+            </Link>
           </div>
           
           <div className="card quick-action-card">
             <h3>Review Applications</h3>
             <p>Process student applications</p>
-            <Link to="/institute/applications" className="btn">View Applications</Link>
+            <Link to="/institute/applications" className={institute?.status === 'approved' ? 'btn' : 'btn btn-disabled'}>
+              View Applications
+            </Link>
           </div>
           
           <div className="card quick-action-card">
             <h3>Reports</h3>
             <p>View institutional reports</p>
-            <Link to="/institute/reports" className="btn">View Reports</Link>
+            <Link to="/institute/reports" className={institute?.status === 'approved' ? 'btn' : 'btn btn-disabled'}>
+              View Reports
+            </Link>
           </div>
         </div>
 
         {institute?.status !== 'approved' && (
           <div className="section warning-message">
-            <h3>⚠️ Pending Approval</h3>
-            <p>Your institution is currently under review. You will be able to manage applications once approved by the system administrator.</p>
-            <p><strong>Current Status:</strong> {institute?.status || 'pending'}</p>
-            {institute?.createdAt && (
-              <p><strong>Registered:</strong> {new Date(institute.createdAt).toLocaleDateString()}</p>
-            )}
+            <div className="flex-between">
+              <div>
+                <h3>⚠️ Pending Approval</h3>
+                <p>Your institution is currently under review. You will be able to manage applications once approved by the system administrator.</p>
+                <p><strong>Current Status:</strong> {institute?.status || 'pending'}</p>
+                {institute?.createdAt && (
+                  <p><strong>Registered:</strong> {new Date(institute.createdAt).toLocaleDateString()}</p>
+                )}
+              </div>
+              <button onClick={onRefresh} className="btn">
+                Check Status
+              </button>
+            </div>
+            <div className="refresh-info">
+              <small>Status updates automatically every 30 seconds, or click "Check Status" to refresh now.</small>
+            </div>
           </div>
         )}
 
@@ -269,6 +344,11 @@ const InstituteHome = ({ institute, currentUser }) => {
             {institute?.approvedAt && (
               <p><strong>Approved On:</strong> {new Date(institute.approvedAt).toLocaleDateString()}</p>
             )}
+            <div className="action-buttons">
+              <Link to="/institute/courses" className="btn btn-primary">
+                Start Managing Courses
+              </Link>
+            </div>
           </div>
         )}
       </div>
