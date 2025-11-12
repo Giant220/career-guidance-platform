@@ -97,7 +97,7 @@ const ManageInstitutions = () => {
               : inst
           )
         );
-        alert('Institute approved successfully!');
+        alert('Institute approved successfully! Students can now see its courses.');
       }
     } catch (error) {
       console.error('Error approving institute:', error);
@@ -156,7 +156,7 @@ const ManageInstitutions = () => {
     }
   };
 
-  // Keep the old status update for suspend/reactivate
+  // For suspend/reactivate (keep existing status endpoint)
   const handleStatusUpdate = async (institutionId, newStatus) => {
     try {
       setActionLoading(institutionId);
