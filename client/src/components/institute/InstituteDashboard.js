@@ -41,7 +41,6 @@ const InstituteDashboard = () => {
 
       if (!response.ok) {
         if (response.status === 404) {
-          // No institution found - redirect to registration
           navigate('/institute-registration');
           return;
         }
