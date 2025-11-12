@@ -33,10 +33,13 @@ const InstituteDashboard = () => {
       const token = await currentUser.getIdToken();
       
       const response = await fetch('/api/institutes/profile/me', {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include'
       });
 
       if (!response.ok) {
@@ -157,10 +160,13 @@ const InstituteHome = ({ institute, currentUser }) => {
 
       const token = await currentUser.getIdToken();
       const response = await fetch('/api/institutes/stats/me', {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include'
       });
       
       if (!response.ok) {
