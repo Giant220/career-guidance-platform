@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext'; // Fixed import path
 
 const InstituteDashboard = () => {
   const [institute, setInstitute] = useState(null);
@@ -6,10 +7,13 @@ const InstituteDashboard = () => {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { currentUser, userRole } = useAuth();
 
   useEffect(() => {
-    fetchInstituteData();
-  }, []);
+    if (currentUser && userRole === 'institute') {
+      fetchInstituteData();
+    }
+  }, [currentUser, userRole]);
 
   const fetchInstituteData = async () => {
     try {
@@ -66,6 +70,18 @@ const InstituteDashboard = () => {
   const handleRefresh = () => {
     fetchInstituteData();
   };
+
+  // Show loading while checking auth
+  if (!currentUser || userRole !== 'institute') {
+    return (
+      <div className="section">
+        <div className="loading">
+          <h3>Access Restricted</h3>
+          <p>Please log in with an institute account to access this dashboard.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
