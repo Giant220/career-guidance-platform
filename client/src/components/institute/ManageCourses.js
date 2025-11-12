@@ -1,8 +1,23 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+
+const ComponentWrapper = ({ institute, children }) => {
+  if (!institute) {
+    return (
+      <div className="section">
+        <div className="error-message">
+          <h3>Institute Profile Required</h3>
+          <p>Please set up your institute profile first to access this feature.</p>
+        </div>
+      </div>
+    );
+  }
+  return children;
+};
 
 const ManageCourses = ({ institute }) => {
+  const { currentUser } = useAuth();
   const [courses, setCourses] = useState([]);
-  const [faculties, setFaculties] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingCourse, setEditingCourse] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -22,29 +37,25 @@ const ManageCourses = ({ institute }) => {
   useEffect(() => {
     if (institute) {
       fetchCourses();
-      fetchFaculties();
     }
   }, [institute]);
 
   const fetchCourses = async () => {
     try {
-      const response = await fetch(`/api/institutes/${institute.id}/courses`);
-      const data = await response.json();
-      setCourses(data);
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/courses?instituteId=${institute.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCourses(data);
+      }
     } catch (error) {
       console.error('Error fetching courses:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchFaculties = async () => {
-    try {
-      const response = await fetch(`/api/institutes/${institute.id}/faculties`);
-      const data = await response.json();
-      setFaculties(data);
-    } catch (error) {
-      console.error('Error fetching faculties:', error);
     }
   };
 
@@ -116,16 +127,22 @@ const ManageCourses = ({ institute }) => {
     };
 
     try {
-      const url = editingCourse ? 
-        `/api/institutes/courses/${editingCourse.id}` : 
-        '/api/institutes/courses';
+      const token = await currentUser.getIdToken();
+      let url, method;
       
-      const method = editingCourse ? 'PUT' : 'POST';
+      if (editingCourse) {
+        url = `/api/courses/${editingCourse.id}`;
+        method = 'PUT';
+      } else {
+        url = '/api/courses';
+        method = 'POST';
+      }
 
       const response = await fetch(url, {
         method: method,
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(courseData)
       });
@@ -172,8 +189,12 @@ const ManageCourses = ({ institute }) => {
   const handleDelete = async (courseId) => {
     if (window.confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
       try {
-        const response = await fetch(`/api/institutes/courses/${courseId}`, {
-          method: 'DELETE'
+        const token = await currentUser.getIdToken();
+        const response = await fetch(`/api/courses/${courseId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
         });
 
         if (response.ok) {
@@ -208,243 +229,247 @@ const ManageCourses = ({ institute }) => {
   }
 
   return (
-    <div className="section">
-      <div className="flex-between mb-1">
-        <div>
-          <h1>Manage Courses</h1>
-          <p>Add, edit, or remove courses offered by your institution</p>
+    <ComponentWrapper institute={institute}>
+      <div className="section">
+        <div className="flex-between mb-1">
+          <div>
+            <h1>Manage Courses</h1>
+            <p>Add, edit, or remove courses offered by your institution</p>
+          </div>
+          <button 
+            onClick={() => setShowForm(true)} 
+            className="btn"
+            disabled={institute?.status !== 'approved'}
+          >
+            + Add New Course
+          </button>
         </div>
-        <button 
-          onClick={() => setShowForm(true)} 
-          className="btn"
-          disabled={institute?.status !== 'approved'}
-        >
-          + Add New Course
-        </button>
-      </div>
 
-      {institute?.status !== 'approved' && (
-        <div className="warning-message">
-          <p>You cannot manage courses until your institution is approved by the administrator.</p>
-        </div>
-      )}
+        {institute?.status !== 'approved' && (
+          <div className="warning-message">
+            <p>You cannot manage courses until your institution is approved by the administrator.</p>
+          </div>
+        )}
 
-      {showForm && (
-        <div className="section form-container">
-          <h2>{editingCourse ? 'Edit Course' : 'Add New Course'}</h2>
-          <form onSubmit={handleSubmit} className="form">
-            <div className="form-row">
-              <div className="form-group">
-                <label>Course Name *</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={courseForm.name}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Faculty/Department *</label>
-                <input
-                  type="text"
-                  name="faculty"
-                  value={courseForm.faculty}
-                  onChange={handleInputChange}
-                  placeholder="e.g., Faculty of Science, School of Business, Department of Engineering"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>Duration *</label>
-                <input
-                  type="text"
-                  name="duration"
-                  value={courseForm.duration}
-                  onChange={handleInputChange}
-                  required
-                  placeholder="e.g., 3 years"
-                />
-              </div>
-              <div className="form-group">
-                <label>Fees *</label>
-                <input
-                  type="text"
-                  name="fees"
-                  value={courseForm.fees}
-                  onChange={handleInputChange}
-                  required
-                  placeholder="e.g., M25,000 per year"
-                />
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>Credits</label>
-                <input
-                  type="number"
-                  name="credits"
-                  value={courseForm.credits}
-                  onChange={handleInputChange}
-                  placeholder="e.g., 360"
-                />
-              </div>
-              <div className="form-group">
-                <label>Intake Periods</label>
-                <input
-                  type="text"
-                  name="intake"
-                  value={courseForm.intake}
-                  onChange={handleInputChange}
-                  placeholder="e.g., January, August"
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>Description *</label>
-              <textarea
-                name="description"
-                value={courseForm.description}
-                onChange={handleInputChange}
-                rows="3"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Entry Requirements *</label>
-              {courseForm.requirements.map((requirement, index) => (
-                <div key={index} className="requirement-input">
+        {showForm && institute?.status === 'approved' && (
+          <div className="section form-container">
+            <h2>{editingCourse ? 'Edit Course' : 'Add New Course'}</h2>
+            <form onSubmit={handleSubmit} className="form">
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Course Name *</label>
                   <input
                     type="text"
-                    value={requirement}
-                    onChange={(e) => handleRequirementChange(index, e.target.value)}
-                    placeholder="e.g., Mathematics C"
+                    name="name"
+                    value={courseForm.name}
+                    onChange={handleInputChange}
                     required
                   />
-                  {courseForm.requirements.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeRequirement(index)}
-                      className="btn btn-danger"
-                    >
-                      Remove
-                    </button>
-                  )}
                 </div>
-              ))}
-              <button
-                type="button"
-                onClick={addRequirement}
-                className="btn btn-secondary"
-              >
-                + Add Requirement
-              </button>
-            </div>
-
-            <div className="form-group">
-              <label>Career Paths</label>
-              {courseForm.careerPaths.map((path, index) => (
-                <div key={index} className="career-path-input">
+                <div className="form-group">
+                  <label>Faculty/Department *</label>
                   <input
                     type="text"
-                    value={path}
-                    onChange={(e) => handleCareerPathChange(index, e.target.value)}
-                    placeholder="e.g., Software Developer"
+                    name="faculty"
+                    value={courseForm.faculty}
+                    onChange={handleInputChange}
+                    placeholder="e.g., Faculty of Science, School of Business"
+                    required
                   />
-                  {courseForm.careerPaths.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeCareerPath(index)}
-                      className="btn btn-danger"
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={addCareerPath}
-                className="btn btn-secondary"
-              >
-                + Add Career Path
-              </button>
-            </div>
-
-            <div className="form-actions">
-              <button type="submit" className="btn">
-                {editingCourse ? 'Update Course' : 'Add Course'}
-              </button>
-              <button type="button" onClick={cancelForm} className="btn btn-secondary">
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      <div className="section">
-        <h3>Your Courses ({courses.length})</h3>
-        <div className="courses-list">
-          {courses.map(course => (
-            <div key={course.id} className="course-management-card">
-              <div className="course-info">
-                <h4>{course.name}</h4>
-                <p className="faculty">{course.faculty}</p>
-                <p className="duration">{course.duration} • {course.fees}</p>
-                <p className="description">{course.description}</p>
-                
-                <div className="course-details">
-                  <div className="detail-item">
-                    <strong>Requirements:</strong>
-                    <ul>
-                      {course.requirements.map((req, index) => (
-                        <li key={index}>{req}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="detail-item">
-                    <strong>Career Paths:</strong>
-                    <ul>
-                      {course.careerPaths.map((path, index) => (
-                        <li key={index}>{path}</li>
-                      ))}
-                    </ul>
-                  </div>
                 </div>
               </div>
-              
-              <div className="course-actions">
-                <button 
-                  onClick={() => handleEdit(course)}
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Duration *</label>
+                  <input
+                    type="text"
+                    name="duration"
+                    value={courseForm.duration}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="e.g., 3 years"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Fees *</label>
+                  <input
+                    type="text"
+                    name="fees"
+                    value={courseForm.fees}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="e.g., M25,000 per year"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Credits</label>
+                  <input
+                    type="number"
+                    name="credits"
+                    value={courseForm.credits}
+                    onChange={handleInputChange}
+                    placeholder="e.g., 360"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Intake Periods</label>
+                  <input
+                    type="text"
+                    name="intake"
+                    value={courseForm.intake}
+                    onChange={handleInputChange}
+                    placeholder="e.g., January, August"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Description *</label>
+                <textarea
+                  name="description"
+                  value={courseForm.description}
+                  onChange={handleInputChange}
+                  rows="3"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Entry Requirements *</label>
+                {courseForm.requirements.map((requirement, index) => (
+                  <div key={index} className="requirement-input">
+                    <input
+                      type="text"
+                      value={requirement}
+                      onChange={(e) => handleRequirementChange(index, e.target.value)}
+                      placeholder="e.g., Mathematics C"
+                      required
+                    />
+                    {courseForm.requirements.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeRequirement(index)}
+                        className="btn btn-danger"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addRequirement}
                   className="btn btn-secondary"
                 >
-                  Edit
-                </button>
-                <button 
-                  onClick={() => handleDelete(course.id)}
-                  className="btn btn-danger"
-                >
-                  Delete
+                  + Add Requirement
                 </button>
               </div>
-            </div>
-          ))}
-        </div>
 
-        {courses.length === 0 && (
-          <div className="text-center">
-            <p>No courses found. Add your first course to get started.</p>
+              <div className="form-group">
+                <label>Career Paths</label>
+                {courseForm.careerPaths.map((path, index) => (
+                  <div key={index} className="career-path-input">
+                    <input
+                      type="text"
+                      value={path}
+                      onChange={(e) => handleCareerPathChange(index, e.target.value)}
+                      placeholder="e.g., Software Developer"
+                    />
+                    {courseForm.careerPaths.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeCareerPath(index)}
+                        className="btn btn-danger"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addCareerPath}
+                  className="btn btn-secondary"
+                >
+                  + Add Career Path
+                </button>
+              </div>
+
+              <div className="form-actions">
+                <button type="submit" className="btn">
+                  {editingCourse ? 'Update Course' : 'Add Course'}
+                </button>
+                <button type="button" onClick={cancelForm} className="btn btn-secondary">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {institute?.status === 'approved' && (
+          <div className="section">
+            <h3>Your Courses ({courses.length})</h3>
+            <div className="courses-list">
+              {courses.map(course => (
+                <div key={course.id} className="course-management-card">
+                  <div className="course-info">
+                    <h4>{course.name}</h4>
+                    <p className="faculty">{course.faculty}</p>
+                    <p className="duration">{course.duration} • {course.fees}</p>
+                    <p className="description">{course.description}</p>
+                    
+                    <div className="course-details">
+                      <div className="detail-item">
+                        <strong>Requirements:</strong>
+                        <ul>
+                          {course.requirements.map((req, index) => (
+                            <li key={index}>{req}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="detail-item">
+                        <strong>Career Paths:</strong>
+                        <ul>
+                          {course.careerPaths.map((path, index) => (
+                            <li key={index}>{path}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="course-actions">
+                    <button 
+                      onClick={() => handleEdit(course)}
+                      className="btn btn-secondary"
+                    >
+                      Edit
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(course.id)}
+                      className="btn btn-danger"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {courses.length === 0 && (
+              <div className="text-center">
+                <p>No courses found. Add your first course to get started.</p>
+              </div>
+            )}
           </div>
         )}
       </div>
-    </div>
+    </ComponentWrapper>
   );
 };
 
