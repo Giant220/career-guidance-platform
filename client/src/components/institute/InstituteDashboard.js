@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import InstituteProfile from './InstituteProfile';
@@ -12,17 +12,20 @@ const InstituteDashboard = () => {
   const { currentUser, logout } = useAuth();
   const [institute, setInstitute] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState([]);
+  const [lastUpdate, setLastUpdate] = useState(null);
   const navigate = useNavigate();
+  const pollIntervalRef = useRef();
 
-  const fetchUserInstitute = async () => {
+  const fetchUserInstitute = async (showLoading = true) => {
     if (!currentUser) {
       setLoading(false);
       return;
     }
 
     try {
+      if (showLoading) setLoading(true);
       const token = await currentUser.getIdToken();
-      console.log('Fetching institutes with token...');
       
       const response = await fetch('/api/institutes', {
         headers: {
@@ -31,47 +34,121 @@ const InstituteDashboard = () => {
         }
       });
 
-      console.log('Response status:', response.status);
-      
       if (response.ok) {
         const allInstitutes = await response.json();
-        console.log('All institutes:', allInstitutes);
         
         // Find institute that belongs to current user
         const userInstitute = allInstitutes.find(inst => 
-          inst.userId === currentUser.uid
+          inst.userId === currentUser.uid || inst.email === currentUser.email
         );
-        console.log('User institute found:', userInstitute);
+        
+        console.log('🔄 Institute data fetched:', userInstitute);
+        
+        // Check if status changed
+        if (userInstitute && institute && userInstitute.status !== institute.status) {
+          console.log('🎉 Status changed!', institute.status, '→', userInstitute.status);
+          // Show alert for status change
+          if (userInstitute.status === 'approved') {
+            alert('🎉 Your institute has been approved! You can now manage courses and applications.');
+          } else if (userInstitute.status === 'rejected') {
+            alert(`❌ Your institute has been rejected. Reason: ${userInstitute.rejectionReason || 'No reason provided'}`);
+          }
+        }
+        
         setInstitute(userInstitute || null);
-      } else {
-        console.error('Failed to fetch institutes:', response.status);
+        setLastUpdate(new Date().toISOString());
       }
     } catch (error) {
       console.error('Error fetching institutes:', error);
       setInstitute(null);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
+  };
+
+  const fetchNotifications = async () => {
+    if (!currentUser) return;
+
+    try {
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/institutes/user/${currentUser.uid}/notifications`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setNotifications(data);
+        
+        // Check for unread notifications
+        const unreadNotifications = data.filter(notification => !notification.read);
+        if (unreadNotifications.length > 0) {
+          console.log('📢 Unread notifications:', unreadNotifications);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
+  };
+
+  const markNotificationAsRead = async (notificationId) => {
+    try {
+      const token = await currentUser.getIdToken();
+      await fetch(`/api/institutes/notifications/${notificationId}/read`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      // Update local state
+      setNotifications(prev => 
+        prev.map(notif => 
+          notif.id === notificationId ? { ...notif, read: true } : notif
+        )
+      );
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  // Setup polling for real-time updates
+  const startPolling = () => {
+    // Clear existing interval
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+    }
+    
+    // Poll every 10 seconds if institute is pending, every 30 seconds if approved
+    const interval = institute?.status === 'pending' ? 10000 : 30000;
+    
+    pollIntervalRef.current = setInterval(() => {
+      console.log('🔄 Polling for institute updates...');
+      fetchUserInstitute(false); // Don't show loading on polls
+      fetchNotifications();
+    }, interval);
   };
 
   useEffect(() => {
     fetchUserInstitute();
-
-    // Set up polling to check for status updates every 30 seconds
-    const intervalId = setInterval(() => {
-      if (institute?.status === 'pending') {
-        console.log('Polling for institute status update...');
-        fetchUserInstitute();
+    fetchNotifications();
+    
+    // Start polling when component mounts
+    startPolling();
+    
+    // Cleanup interval on unmount
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
       }
-    }, 30000); // Check every 30 seconds
+    };
+  }, [currentUser]);
 
-    return () => clearInterval(intervalId);
-  }, [currentUser, institute?.status]); // Re-run when status changes
-
-  // Also add a manual refresh function
-  const refreshInstituteData = () => {
-    fetchUserInstitute();
-  };
+  // Restart polling when institute status changes
+  useEffect(() => {
+    startPolling();
+  }, [institute?.status]);
 
   const handleLogout = async () => {
     try {
@@ -84,6 +161,11 @@ const InstituteDashboard = () => {
 
   const updateInstitute = (instituteData) => {
     setInstitute(instituteData);
+  };
+
+  const refreshInstituteData = () => {
+    fetchUserInstitute();
+    fetchNotifications();
   };
 
   if (loading) {
@@ -112,6 +194,39 @@ const InstituteDashboard = () => {
           <Link to="/institute/applications" className={!institute ? 'disabled-link' : ''}>Applications</Link>
           <Link to="/institute/admissions" className={!institute ? 'disabled-link' : ''}>Admissions</Link>
           <Link to="/institute/reports" className={!institute ? 'disabled-link' : ''}>Reports</Link>
+          
+          {/* Notifications Bell */}
+          <div className="notifications-container">
+            <button 
+              className="notifications-btn"
+              onClick={fetchNotifications}
+            >
+              🔔
+              {notifications.filter(n => !n.read).length > 0 && (
+                <span className="notification-badge">
+                  {notifications.filter(n => !n.read).length}
+                </span>
+              )}
+            </button>
+            <div className="notifications-dropdown">
+              {notifications.slice(0, 5).map(notification => (
+                <div 
+                  key={notification.id} 
+                  className={`notification-item ${notification.read ? 'read' : 'unread'}`}
+                  onClick={() => markNotificationAsRead(notification.id)}
+                >
+                  <p>{notification.message}</p>
+                  <small>{new Date(notification.createdAt).toLocaleDateString()}</small>
+                </div>
+              ))}
+              {notifications.length === 0 && (
+                <div className="notification-item">
+                  <p>No notifications</p>
+                </div>
+              )}
+            </div>
+          </div>
+          
           <button onClick={handleLogout} className="btn btn-secondary">Logout</button>
         </div>
       </nav>
@@ -122,7 +237,8 @@ const InstituteDashboard = () => {
             <InstituteHome 
               institute={institute} 
               currentUser={currentUser} 
-              onRefresh={refreshInstituteData} 
+              onRefresh={refreshInstituteData}
+              notifications={notifications}
             />
           } />
           <Route path="/profile" element={
@@ -167,7 +283,7 @@ const InstituteDashboard = () => {
   );
 };
 
-const InstituteHome = ({ institute, currentUser, onRefresh }) => {
+const InstituteHome = ({ institute, currentUser, onRefresh, notifications }) => {
   if (!institute) {
     return (
       <div className="institute-home">
@@ -252,14 +368,29 @@ const InstituteHome = ({ institute, currentUser, onRefresh }) => {
               <h1>Welcome, {institute?.name || 'Institute'}</h1>
               <p>{institute?.description || 'Manage your institution and student applications'}</p>
             </div>
-            <button onClick={onRefresh} className="btn btn-secondary">
-              Refresh Status
-            </button>
+            <div className="header-actions">
+              <button onClick={onRefresh} className="btn btn-secondary">
+                Refresh Status
+              </button>
+            </div>
           </div>
           <div className={`status-badge status-${institute?.status || 'pending'}`}>
             {institute?.status ? institute.status.charAt(0).toUpperCase() + institute.status.slice(1) : 'Pending Approval'}
           </div>
         </div>
+
+        {/* Show unread notifications */}
+        {notifications.filter(n => !n.read).length > 0 && (
+          <div className="section notification-alert">
+            <h3>📢 New Notifications</h3>
+            {notifications.filter(n => !n.read).slice(0, 3).map(notification => (
+              <div key={notification.id} className="alert-message">
+                <p>{notification.message}</p>
+                <small>{new Date(notification.createdAt).toLocaleString()}</small>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="dashboard-top">
           <div className="card">
@@ -332,7 +463,7 @@ const InstituteHome = ({ institute, currentUser, onRefresh }) => {
               </button>
             </div>
             <div className="refresh-info">
-              <small>Status updates automatically every 30 seconds, or click "Check Status" to refresh now.</small>
+              <small>Status updates automatically every 10 seconds, or click "Check Status" to refresh now.</small>
             </div>
           </div>
         )}
