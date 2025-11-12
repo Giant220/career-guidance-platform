@@ -66,34 +66,43 @@ const InstituteProfile = ({ institute, onInstituteUpdate }) => {
 
     setSaving(true);
     try {
+      const token = await currentUser.getIdToken();
+      console.log('Saving institute profile with token...');
+      
       let response;
+      let url;
+      let method;
       
       if (institute) {
-        response = await fetch(`/api/institutes/${institute.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...profile,
-            userId: currentUser.uid
-          })
-        });
+        url = `/api/institutes/${institute.id}`;
+        method = 'PUT';
       } else {
-        response = await fetch('/api/institutes', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...profile,
-            userId: currentUser.uid
-          })
-        });
+        url = '/api/institutes';
+        method = 'POST';
       }
+
+      const requestBody = {
+        ...profile,
+        userId: currentUser.uid
+      };
+
+      console.log('Making request to:', url, 'with method:', method);
+      console.log('Request body:', requestBody);
+
+      response = await fetch(url, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      console.log('Response status:', response.status);
 
       if (response.ok) {
         const result = await response.json();
+        console.log('Save successful:', result);
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
         
@@ -105,11 +114,13 @@ const InstituteProfile = ({ institute, onInstituteUpdate }) => {
           }
         }
       } else {
-        throw new Error('Failed to save profile');
+        const errorText = await response.text();
+        console.error('Server response error:', errorText);
+        throw new Error(`Failed to save profile: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
       console.error('Error saving profile:', error);
-      alert('Error saving profile');
+      alert(`Error saving profile: ${error.message}`);
     } finally {
       setSaving(false);
     }
