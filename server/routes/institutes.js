@@ -3,11 +3,11 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const db = admin.firestore();
 
-// GET all institutes (for students - only approved ones) - PUBLIC
+// GET all institutes (for students - only approved ones)
 router.get('/', async (req, res) => {
   try {
     const { status, forStudents } = req.query;
-    let query = db.collection('institutions');
+    let query = db.collection('institutes');
 
     if (forStudents === 'true') {
       query = query.where('status', '==', 'approved');
@@ -32,10 +32,10 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET single institute by ID - PUBLIC
+// GET single institute by ID
 router.get('/:id', async (req, res) => {
   try {
-    const doc = await db.collection('institutions').doc(req.params.id).get();
+    const doc = await db.collection('institutes').doc(req.params.id).get();
     if (!doc.exists) {
       return res.status(404).json({ error: 'Institute not found' });
     }
@@ -46,10 +46,9 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// CREATE new institute - PROTECTED
+// CREATE new institute
 router.post('/', async (req, res) => {
   try {
-    const userId = req.user.uid; // From auth middleware
     const {
       name,
       type,
@@ -58,42 +57,11 @@ router.post('/', async (req, res) => {
       location,
       website,
       established,
-      description
+      description,
+      userId
     } = req.body;
 
-    // Validate required fields
-    if (!name || !email || !type || !location) {
-      return res.status(400).json({ 
-        error: 'Missing required fields',
-        required: ['name', 'email', 'type', 'location']
-      });
-    }
-
-    // Check if user already has an institution
-    const existingUserInstitution = await db.collection('institutions')
-      .where('userId', '==', userId)
-      .limit(1)
-      .get();
-
-    if (!existingUserInstitution.empty) {
-      return res.status(400).json({ 
-        error: 'You already have an institution registered' 
-      });
-    }
-
-    // Check if email already exists
-    const existingEmail = await db.collection('institutions')
-      .where('email', '==', email)
-      .limit(1)
-      .get();
-
-    if (!existingEmail.empty) {
-      return res.status(400).json({ 
-        error: 'Institution with this email already exists' 
-      });
-    }
-
-    const institutionData = {
+    const instituteData = {
       name,
       type,
       email,
@@ -102,17 +70,17 @@ router.post('/', async (req, res) => {
       website: website || '',
       established: established || '',
       description: description || '',
-      userId, // Link to creator
+      userId: userId || '',
       status: 'pending',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    const docRef = await db.collection('institutions').add(institutionData);
+    const docRef = await db.collection('institutes').add(instituteData);
 
     res.status(201).json({ 
       id: docRef.id, 
-      ...institutionData,
+      ...instituteData,
       message: 'Institute created successfully. Waiting for admin approval.' 
     });
   } catch (error) {
@@ -121,29 +89,15 @@ router.post('/', async (req, res) => {
   }
 });
 
-// UPDATE institute by ID - PROTECTED (only owner or admin)
+// UPDATE institute by ID
 router.put('/:id', async (req, res) => {
   try {
-    const userId = req.user.uid;
-    const instituteId = req.params.id;
-
-    // Verify ownership or admin rights
-    const instituteDoc = await db.collection('institutions').doc(instituteId).get();
-    if (!instituteDoc.exists) {
-      return res.status(404).json({ error: 'Institute not found' });
-    }
-
-    const institute = instituteDoc.data();
-    if (institute.userId !== userId) {
-      return res.status(403).json({ error: 'Not authorized to update this institution' });
-    }
-
     const updateData = { 
       ...req.body, 
       updatedAt: new Date().toISOString() 
     };
     
-    await db.collection('institutions').doc(instituteId).update(updateData);
+    await db.collection('institutes').doc(req.params.id).update(updateData);
     
     res.json({ message: 'Institute updated successfully' });
   } catch (error) {
@@ -152,24 +106,10 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE institute by ID - PROTECTED (only owner or admin)
+// DELETE institute by ID
 router.delete('/:id', async (req, res) => {
   try {
-    const userId = req.user.uid;
-    const instituteId = req.params.id;
-
-    // Verify ownership or admin rights
-    const instituteDoc = await db.collection('institutions').doc(instituteId).get();
-    if (!instituteDoc.exists) {
-      return res.status(404).json({ error: 'Institute not found' });
-    }
-
-    const institute = instituteDoc.data();
-    if (institute.userId !== userId) {
-      return res.status(403).json({ error: 'Not authorized to delete this institution' });
-    }
-
-    await db.collection('institutions').doc(instituteId).delete();
+    await db.collection('institutes').doc(req.params.id).delete();
     res.json({ message: 'Institute deleted successfully' });
   } catch (error) {
     console.error('Error deleting institute:', error);
@@ -177,17 +117,17 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// APPROVE institute - ADMIN ONLY
+// APPROVE institute
 router.post('/:id/approve', async (req, res) => {
   try {
     const instituteId = req.params.id;
     
-    const instituteDoc = await db.collection('institutions').doc(instituteId).get();
+    const instituteDoc = await db.collection('institutes').doc(instituteId).get();
     if (!instituteDoc.exists) {
       return res.status(404).json({ error: 'Institute not found' });
     }
 
-    await db.collection('institutions').doc(instituteId).update({
+    await db.collection('institutes').doc(instituteId).update({
       status: 'approved',
       approvedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -220,13 +160,13 @@ router.post('/:id/approve', async (req, res) => {
   }
 });
 
-// REJECT institute - ADMIN ONLY
+// REJECT institute
 router.post('/:id/reject', async (req, res) => {
   try {
     const instituteId = req.params.id;
     const { reason } = req.body;
 
-    await db.collection('institutions').doc(instituteId).update({
+    await db.collection('institutes').doc(instituteId).update({
       status: 'rejected',
       rejectionReason: reason || '',
       rejectedAt: new Date().toISOString(),
@@ -243,10 +183,10 @@ router.post('/:id/reject', async (req, res) => {
   }
 });
 
-// GET institutes for students (only approved ones) - PUBLIC
+// GET institutes for students (only approved ones)
 router.get('/public/approved', async (req, res) => {
   try {
-    const snapshot = await db.collection('institutions')
+    const snapshot = await db.collection('institutes')
       .where('status', '==', 'approved')
       .orderBy('name')
       .get();
@@ -263,14 +203,12 @@ router.get('/public/approved', async (req, res) => {
   }
 });
 
-// ✅ INSTITUTE DASHBOARD ROUTES - USER SPECIFIC
-
-// Get current user's institute profile
+// ✅ CRITICAL: Get current user's institute profile
 router.get('/profile/me', async (req, res) => {
   try {
-    const userId = req.user.uid;
+    const userId = req.user.uid; // From auth middleware
     
-    const snapshot = await db.collection('institutions')
+    const snapshot = await db.collection('institutes')
       .where('userId', '==', userId)
       .limit(1)
       .get();
@@ -295,12 +233,12 @@ router.get('/profile/me', async (req, res) => {
   }
 });
 
-// Get current user's institute stats
+// ✅ CRITICAL: Get current user's institute stats
 router.get('/stats/me', async (req, res) => {
   try {
     const userId = req.user.uid;
     
-    const snapshot = await db.collection('institutions')
+    const snapshot = await db.collection('institutes')
       .where('userId', '==', userId)
       .limit(1)
       .get();
@@ -347,12 +285,12 @@ router.get('/stats/me', async (req, res) => {
   }
 });
 
-// Get current user's institute courses
+// ✅ CRITICAL: Get current user's institute courses
 router.get('/courses/me', async (req, res) => {
   try {
     const userId = req.user.uid;
     
-    const snapshot = await db.collection('institutions')
+    const snapshot = await db.collection('institutes')
       .where('userId', '==', userId)
       .limit(1)
       .get();
