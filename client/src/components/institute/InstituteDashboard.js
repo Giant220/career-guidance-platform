@@ -55,7 +55,7 @@ const InstituteDashboard = () => {
           </span>
         </div>
         <div className="nav-links">
-          <Link to="/institute" onClick={() => window.location.reload()}>Dashboard</Link>
+          <Link to="/institute">Dashboard</Link>
           <Link to="/institute/profile">Profile</Link>
           <Link to="/institute/courses">Courses</Link>
           <Link to="/institute/applications">Applications</Link>
