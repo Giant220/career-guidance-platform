@@ -26,7 +26,7 @@ const ManageInstitutions = ({ currentUser }) => {
       }
 
       const token = await currentUser.getIdToken();
-      const response = await fetch('/api/admin/institutions', {
+      const response = await fetch('/api/institutes', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -88,7 +88,7 @@ const ManageInstitutions = ({ currentUser }) => {
       setActionLoading(institutionId);
       
       const token = await currentUser.getIdToken();
-      const response = await fetch(`/api/admin/institutions/${institutionId}/approve`, {
+      const response = await fetch(`/api/institutes/${institutionId}/approve`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -133,7 +133,7 @@ const ManageInstitutions = ({ currentUser }) => {
       setActionLoading(institutionId);
       
       const token = await currentUser.getIdToken();
-      const response = await fetch(`/api/admin/institutions/${institutionId}/reject`, {
+      const response = await fetch(`/api/institutes/${institutionId}/reject`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -179,7 +179,7 @@ const ManageInstitutions = ({ currentUser }) => {
       setActionLoading(institutionId);
       
       const token = await currentUser.getIdToken();
-      const response = await fetch(`/api/admin/institutions/${institutionId}/status`, {
+      const response = await fetch(`/api/institutes/${institutionId}/status`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -237,7 +237,7 @@ Applications: ${institution.applicationCount || 0}
         setActionLoading(institutionId);
         
         const token = await currentUser.getIdToken();
-        const response = await fetch(`/api/admin/institutions/${institutionId}`, {
+        const response = await fetch(`/api/institutes/${institutionId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
