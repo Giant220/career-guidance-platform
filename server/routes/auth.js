@@ -3,25 +3,29 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const db = admin.firestore();
 
-// ✅ AUTH MIDDLEWARE for protected routes
+// ✅ AUTH MIDDLEWARE for protected routes in this file
 const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('❌ No token provided for auth route');
       return res.status(401).json({ error: 'No token provided' });
     }
 
     const token = authHeader.split('Bearer ')[1];
+    console.log('🔍 Verifying token in auth route...');
+    
     const decodedToken = await admin.auth().verifyIdToken(token);
     req.user = decodedToken;
+    console.log('✅ Token verified for user:', decodedToken.email);
     next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
+    console.error('❌ Auth middleware error in auth route:', error);
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 };
 
-// User registration (public)
+// User registration (public - no auth required)
 router.post('/signup', async (req, res) => {
   try {
     console.log('=== SIGNUP REQUEST RECEIVED ===');
@@ -112,7 +116,7 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// ✅ FIXED: Get user data by UID (protected route)
+// ✅ FIXED: Get user data by UID (protected route - requires auth)
 router.get('/user/:uid', authenticate, async (req, res) => {
   try {
     const { uid } = req.params;
@@ -122,6 +126,7 @@ router.get('/user/:uid', authenticate, async (req, res) => {
     
     // ✅ SECURITY: Ensure user can only access their own data
     if (req.user.uid !== uid) {
+      console.log('❌ Access denied: User trying to access different UID');
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -160,11 +165,16 @@ router.get('/user/:uid', authenticate, async (req, res) => {
   }
 });
 
-// ✅ Add a health check endpoint
+// ✅ Add a health check endpoint (public)
 router.get('/health', (req, res) => {
   res.json({ 
     status: 'Auth routes working',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      'POST /signup': 'User registration',
+      'GET /user/:uid': 'Get user data (protected)',
+      'GET /health': 'Health check'
+    }
   });
 });
 
