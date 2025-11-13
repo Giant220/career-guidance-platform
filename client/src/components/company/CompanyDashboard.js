@@ -35,10 +35,8 @@ const CompanyDashboard = () => {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        credentials: 'include'
+          'Content-Type': 'application/json'
+        }
       });
 
       if (!response.ok) {
@@ -151,8 +149,8 @@ const CompanyHome = ({ company, currentUser }) => {
       setStatsLoading(true);
       setStatsError(false);
       
-      if (!company?.id || !currentUser) {
-        throw new Error('Company ID or user not available');
+      if (!currentUser) {
+        throw new Error('User not available');
       }
 
       const token = await currentUser.getIdToken();
@@ -160,10 +158,8 @@ const CompanyHome = ({ company, currentUser }) => {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        credentials: 'include'
+          'Content-Type': 'application/json'
+        }
       });
       
       if (!response.ok) {
