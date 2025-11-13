@@ -15,17 +15,37 @@ const CourseApplication = () => {
 
   const fetchQualifiedCourses = async () => {
     try {
-      const response = await fetch(`/api/students/${currentUser.uid}/qualified-courses`);
-      const data = await response.json();
-      setQualifiedCourses(data);
+      // ✅ ADD AUTHENTICATION TOKEN
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/students/${currentUser.uid}/qualified-courses`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       
-      // Get unique institutions for filter
-      const institutions = [...new Set(data.map(course => course.institutionName))];
-      if (institutions.length > 0) {
-        setSelectedInstitution(institutions[0]);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // ✅ ENSURE DATA IS ALWAYS AN ARRAY
+      if (Array.isArray(data)) {
+        setQualifiedCourses(data);
+        
+        // Get unique institutions for filter
+        const institutions = [...new Set(data.map(course => course.institutionName))];
+        if (institutions.length > 0) {
+          setSelectedInstitution(institutions[0]);
+        }
+      } else {
+        console.error('Invalid response format:', data);
+        setQualifiedCourses([]);
       }
     } catch (error) {
       console.error('Error fetching courses:', error);
+      setQualifiedCourses([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -33,20 +53,43 @@ const CourseApplication = () => {
 
   const fetchApplications = async () => {
     try {
-      const response = await fetch(`/api/students/${currentUser.uid}/applications`);
+      // ✅ ADD AUTHENTICATION TOKEN
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/students/${currentUser.uid}/applications`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
-      setApplications(data);
+      
+      // ✅ ENSURE DATA IS ALWAYS AN ARRAY
+      if (Array.isArray(data)) {
+        setApplications(data);
+      } else {
+        console.error('Invalid response format:', data);
+        setApplications([]);
+      }
     } catch (error) {
       console.error('Error fetching applications:', error);
+      setApplications([]); // Set empty array on error
     }
   };
 
   const handleApply = async (courseId, courseName, institutionId) => {
     try {
+      // ✅ ADD AUTHENTICATION TOKEN
+      const token = await currentUser.getIdToken();
       const response = await fetch('/api/applications', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           studentId: currentUser.uid,
@@ -57,12 +100,14 @@ const CourseApplication = () => {
         })
       });
 
+      const result = await response.json();
+
       if (response.ok) {
         alert('Application submitted successfully!');
         fetchApplications();
         fetchQualifiedCourses();
       } else {
-        alert('Failed to submit application. You may have reached the limit for this institution.');
+        alert(`Failed to submit application: ${result.error || 'You may have reached the limit for this institution.'}`);
       }
     } catch (error) {
       console.error('Error applying:', error);
@@ -71,20 +116,30 @@ const CourseApplication = () => {
   };
 
   const hasAppliedToInstitution = (institutionId) => {
+    if (!Array.isArray(applications)) return false;
+    
     return applications.filter(app => 
       app.institutionId === institutionId && app.status !== 'rejected'
     ).length >= 2;
   };
 
   const hasAppliedToCourse = (courseId) => {
+    if (!Array.isArray(applications)) return false;
+    
     return applications.some(app => app.courseId === courseId && app.status !== 'rejected');
   };
 
-  const filteredCourses = qualifiedCourses.filter(course => 
-    selectedInstitution ? course.institutionName === selectedInstitution : true
-  );
+  // ✅ SAFE FILTERING - Ensure qualifiedCourses is always an array
+  const filteredCourses = Array.isArray(qualifiedCourses) 
+    ? qualifiedCourses.filter(course => 
+        selectedInstitution ? course.institutionName === selectedInstitution : true
+      )
+    : [];
 
-  const institutions = [...new Set(qualifiedCourses.map(course => course.institutionName))];
+  // ✅ SAFE INSTITUTION EXTRACTION
+  const institutions = Array.isArray(qualifiedCourses) 
+    ? [...new Set(qualifiedCourses.map(course => course.institutionName))].filter(Boolean)
+    : [];
 
   if (loading) {
     return <div className="section">Loading courses...</div>;
@@ -95,21 +150,21 @@ const CourseApplication = () => {
       <h1>Course Applications</h1>
       <p>Browse courses you qualify for and apply (max 2 per institution)</p>
 
-      {applications.length > 0 && (
+      {Array.isArray(applications) && applications.length > 0 && (
         <div className="section">
           <h3>Your Applications</h3>
           <div className="applications-list">
             {applications.map(application => (
               <div key={application.id} className="application-card">
                 <div className="application-info">
-                  <h4>{application.courseName}</h4>
-                  <p>{application.institutionName}</p>
-                  <span className={`status-badge status-${application.status}`}>
-                    {application.status}
+                  <h4>{application.courseName || 'Unknown Course'}</h4>
+                  <p>{application.institutionName || 'Unknown Institution'}</p>
+                  <span className={`status-badge status-${application.status || 'pending'}`}>
+                    {application.status || 'pending'}
                   </span>
                 </div>
                 <div className="application-date">
-                  Applied: {new Date(application.applicationDate).toLocaleDateString()}
+                  Applied: {application.applicationDate ? new Date(application.applicationDate).toLocaleDateString() : 'Unknown date'}
                 </div>
               </div>
             ))}
@@ -138,23 +193,23 @@ const CourseApplication = () => {
             const appliedToInstitution = hasAppliedToInstitution(course.institutionId);
             const appliedToCourse = hasAppliedToCourse(course.id);
             const canApply = !appliedToCourse && 
-              (applications.filter(app => app.institutionId === course.institutionId).length < 2);
+              (Array.isArray(applications) ? applications.filter(app => app.institutionId === course.institutionId).length < 2 : true);
 
             return (
               <div key={course.id} className="course-card">
-                <h3>{course.name}</h3>
-                <p className="institution">{course.institutionName}</p>
-                <p className="duration">Duration: {course.duration}</p>
-                <p className="fees">Fees: {course.fees}</p>
-                <p className="description">{course.description}</p>
+                <h3>{course.name || 'Unnamed Course'}</h3>
+                <p className="institution">{course.institutionName || 'Unknown Institution'}</p>
+                <p className="duration">Duration: {course.duration || 'Not specified'}</p>
+                <p className="fees">Fees: {course.fees || 'Not specified'}</p>
+                <p className="description">{course.description || 'No description available'}</p>
                 
                 <div className="requirements">
                   <h4>Requirements:</h4>
-                  {course.requirements.map((req, index) => (
+                  {Array.isArray(course.requirements) ? course.requirements.map((req, index) => (
                     <div key={index} className="requirement-item">
                       <span>{req}</span>
                     </div>
-                  ))}
+                  )) : <p>No specific requirements</p>}
                 </div>
 
                 <div className="course-actions">
@@ -184,6 +239,9 @@ const CourseApplication = () => {
           <div className="text-center">
             <p>No courses found matching your criteria.</p>
             <p>Make sure you've entered your grades to see qualified courses.</p>
+            <button onClick={fetchQualifiedCourses} className="btn btn-secondary mt-1">
+              Try Again
+            </button>
           </div>
         )}
       </div>
