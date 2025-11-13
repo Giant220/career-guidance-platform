@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 
-const PostJobs = ({ company }) => {
+const PostJobs = ({ company, currentUser }) => {
   const [jobs, setJobs] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingJob, setEditingJob] = useState(null);
@@ -18,14 +19,25 @@ const PostJobs = ({ company }) => {
   });
 
   useEffect(() => {
-    if (company) {
+    if (company && currentUser) {
       fetchJobs();
     }
-  }, [company]);
+  }, [company, currentUser]);
 
   const fetchJobs = async () => {
     try {
-      const response = await fetch(`/api/companies/${company.id}/jobs`);
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/companies/${company.id}/jobs`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setJobs(data);
     } catch (error) {
@@ -104,6 +116,7 @@ const PostJobs = ({ company }) => {
     };
 
     try {
+      const token = await currentUser.getIdToken();
       const url = editingJob ? 
         `/api/companies/jobs/${editingJob.id}` : 
         '/api/companies/jobs';
@@ -114,9 +127,12 @@ const PostJobs = ({ company }) => {
         method: method,
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(jobData)
       });
+
+      const result = await response.json();
 
       if (response.ok) {
         alert(editingJob ? 'Job updated successfully!' : 'Job posted successfully!');
@@ -133,10 +149,12 @@ const PostJobs = ({ company }) => {
           deadline: ''
         });
         fetchJobs();
+      } else {
+        alert(`Error: ${result.error || 'Failed to save job'}`);
       }
     } catch (error) {
       console.error('Error saving job:', error);
-      alert('Error saving job');
+      alert('Error saving job: ' + error.message);
     }
   };
 
@@ -148,28 +166,37 @@ const PostJobs = ({ company }) => {
       location: job.location,
       salary: job.salary,
       description: job.description,
-      requirements: job.requirements.length > 0 ? job.requirements : [''],
-      qualifications: job.qualifications.length > 0 ? job.qualifications : [''],
+      requirements: job.requirements && job.requirements.length > 0 ? job.requirements : [''],
+      qualifications: job.qualifications && job.qualifications.length > 0 ? job.qualifications : [''],
       deadline: job.deadline ? job.deadline.split('T')[0] : ''
     });
     setShowForm(true);
   };
 
   const handleDelete = async (jobId) => {
-    if (window.confirm('Are you sure you want to delete this job posting?')) {
-      try {
-        const response = await fetch(`/api/companies/jobs/${jobId}`, {
-          method: 'DELETE'
-        });
+    if (!window.confirm('Are you sure you want to delete this job posting?')) return;
 
-        if (response.ok) {
-          alert('Job deleted successfully!');
-          fetchJobs();
+    try {
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/companies/jobs/${jobId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
-      } catch (error) {
-        console.error('Error deleting job:', error);
-        alert('Error deleting job');
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert('Job deleted successfully!');
+        fetchJobs();
+      } else {
+        alert(`Error: ${result.error || 'Failed to delete job'}`);
       }
+    } catch (error) {
+      console.error('Error deleting job:', error);
+      alert('Error deleting job: ' + error.message);
     }
   };
 
@@ -177,21 +204,27 @@ const PostJobs = ({ company }) => {
     const newStatus = currentStatus === 'active' ? 'closed' : 'active';
     
     try {
+      const token = await currentUser.getIdToken();
       const response = await fetch(`/api/companies/jobs/${jobId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ status: newStatus })
       });
 
+      const result = await response.json();
+
       if (response.ok) {
         alert(`Job ${newStatus === 'active' ? 'activated' : 'closed'} successfully!`);
         fetchJobs();
+      } else {
+        alert(`Error: ${result.error || 'Failed to update job status'}`);
       }
     } catch (error) {
       console.error('Error updating job status:', error);
-      alert('Error updating job status');
+      alert('Error updating job status: ' + error.message);
     }
   };
 
@@ -214,8 +247,8 @@ const PostJobs = ({ company }) => {
     return <div className="section">Loading jobs...</div>;
   }
 
-  const activeJobs = jobs.filter(job => job.status === 'active');
-  const closedJobs = jobs.filter(job => job.status === 'closed');
+  const activeJobs = Array.isArray(jobs) ? jobs.filter(job => job.status === 'active') : [];
+  const closedJobs = Array.isArray(jobs) ? jobs.filter(job => job.status === 'closed') : [];
 
   return (
     <div className="section">
@@ -412,12 +445,12 @@ const PostJobs = ({ company }) => {
                   <div className="detail-item">
                     <strong>Requirements:</strong>
                     <ul>
-                      {job.requirements.map((req, index) => (
+                      {Array.isArray(job.requirements) && job.requirements.map((req, index) => (
                         <li key={index}>{req}</li>
                       ))}
                     </ul>
                   </div>
-                  {job.qualifications.length > 0 && (
+                  {Array.isArray(job.qualifications) && job.qualifications.length > 0 && (
                     <div className="detail-item">
                       <strong>Preferred Qualifications:</strong>
                       <ul>
@@ -435,7 +468,7 @@ const PostJobs = ({ company }) => {
                   </p>
                 )}
                 <p className="post-date">
-                  Posted: {new Date(job.postedDate).toLocaleDateString()}
+                  Posted: {job.postedDate ? new Date(job.postedDate).toLocaleDateString() : 'Unknown date'}
                 </p>
               </div>
               
