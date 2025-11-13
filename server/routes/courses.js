@@ -3,18 +3,18 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const db = admin.firestore();
 
-// GET courses - STRICTLY filtered by institutionId
+// GET courses - STRICTLY filtered by instituteId (matching frontend)
 router.get('/', async (req, res) => {
   try {
-    const { institutionId, status } = req.query;
+    const { instituteId, status } = req.query; // Changed to instituteId
     
-    // institutionId is REQUIRED - courses belong to specific institutions
-    if (!institutionId) {
-      return res.status(400).json({ error: 'institutionId is required' });
+    // instituteId is REQUIRED - courses belong to specific institutes
+    if (!instituteId) {
+      return res.status(400).json({ error: 'instituteId is required' });
     }
 
     let query = db.collection('courses')
-      .where('institutionId', '==', institutionId);
+      .where('instituteId', '==', instituteId); // Changed to instituteId
 
     // Optional status filter
     if (status && status !== 'all') {
@@ -27,7 +27,7 @@ router.get('/', async (req, res) => {
       ...doc.data()
     }));
 
-    console.log(`📚 Found ${courses.length} courses for institution ${institutionId}`);
+    console.log(`📚 Found ${courses.length} courses for institute ${instituteId}`);
     res.status(200).json(courses);
 
   } catch (error) {
@@ -36,10 +36,10 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET single course by ID - with institution verification
+// GET single course by ID - with institute verification
 router.get('/:id', async (req, res) => {
   try {
-    const { institutionId } = req.query; // Optional: verify course belongs to institution
+    const { instituteId } = req.query; // Changed to instituteId
     
     const doc = await db.collection('courses').doc(req.params.id).get();
     if (!doc.exists) {
@@ -48,9 +48,9 @@ router.get('/:id', async (req, res) => {
 
     const course = doc.data();
     
-    // If institutionId provided, verify the course belongs to that institution
-    if (institutionId && course.institutionId !== institutionId) {
-      return res.status(403).json({ error: 'Course does not belong to this institution' });
+    // If instituteId provided, verify the course belongs to that institute
+    if (instituteId && course.instituteId !== instituteId) {
+      return res.status(403).json({ error: 'Course does not belong to this institute' });
     }
 
     res.json({ id: doc.id, ...course });
@@ -60,7 +60,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// CREATE new course - automatically sets institutionId
+// CREATE new course - automatically sets instituteId (matching frontend)
 router.post('/', async (req, res) => {
   try {
     const {
@@ -73,8 +73,8 @@ router.post('/', async (req, res) => {
       requirements,
       careerPaths,
       intake,
-      institutionId, // REQUIRED - which institution owns this course
-      institutionName
+      institutionId, // From frontend - will map to instituteId
+      institutionName // From frontend - will map to instituteName
     } = req.body;
 
     // Validate required fields
@@ -82,13 +82,13 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Verify the institution exists
-    const institutionDoc = await db.collection('institutes').doc(institutionId).get();
-    if (!institutionDoc.exists) {
-      return res.status(404).json({ error: 'Institution not found' });
+    // Verify the institute exists
+    const instituteDoc = await db.collection('institutes').doc(institutionId).get();
+    if (!instituteDoc.exists) {
+      return res.status(404).json({ error: 'Institute not found' });
     }
 
-    const institutionData = institutionDoc.data();
+    const instituteData = instituteDoc.data();
 
     const courseData = {
       name,
@@ -100,16 +100,17 @@ router.post('/', async (req, res) => {
       requirements: requirements || [],
       careerPaths: careerPaths || [],
       intake: intake || '',
-      institutionId, // This ties the course to the institution
-      institutionName: institutionName || institutionData.name,
-      status: 'pending', // Courses are pending until institution is approved
+      // MAP frontend field names to backend field names
+      instituteId: institutionId, // Map institutionId → instituteId
+      instituteName: institutionName || instituteData.name, // Map institutionName → instituteName
+      status: 'pending', // Courses are pending until institute is approved
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
     const docRef = await db.collection('courses').add(courseData);
 
-    console.log(`✅ Created new course for institution ${institutionId}: ${name}`);
+    console.log(`✅ Created new course for institute ${institutionId}: ${name}`);
 
     res.status(201).json({ 
       id: docRef.id, 
@@ -122,11 +123,11 @@ router.post('/', async (req, res) => {
   }
 });
 
-// UPDATE course by ID - verify institution ownership
+// UPDATE course by ID - verify institute ownership
 router.put('/:id', async (req, res) => {
   try {
     const courseId = req.params.id;
-    const { institutionId } = req.body; // Should come from authenticated institute
+    const { institutionId } = req.body; // From frontend
     
     // Get the current course data
     const courseDoc = await db.collection('courses').doc(courseId).get();
@@ -136,9 +137,9 @@ router.put('/:id', async (req, res) => {
     
     const currentCourse = courseDoc.data();
     
-    // Verify the course belongs to the institution making the request
-    if (institutionId && currentCourse.institutionId !== institutionId) {
-      return res.status(403).json({ error: 'Cannot update course from another institution' });
+    // Verify the course belongs to the institute making the request
+    if (institutionId && currentCourse.instituteId !== institutionId) {
+      return res.status(403).json({ error: 'Cannot update course from another institute' });
     }
 
     const updateData = { 
@@ -146,12 +147,22 @@ router.put('/:id', async (req, res) => {
       updatedAt: new Date().toISOString() 
     };
 
-    // Don't allow changing institutionId (course cannot be moved between institutions)
-    delete updateData.institutionId;
+    // Map frontend fields to backend fields
+    if (updateData.institutionId) {
+      updateData.instituteId = updateData.institutionId;
+      delete updateData.institutionId;
+    }
+    if (updateData.institutionName) {
+      updateData.instituteName = updateData.institutionName;
+      delete updateData.institutionName;
+    }
+    
+    // Don't allow changing instituteId (course cannot be moved between institutes)
+    delete updateData.instituteId;
     
     await db.collection('courses').doc(courseId).update(updateData);
     
-    console.log(`✅ Course ${courseId} updated for institution ${currentCourse.institutionId}`);
+    console.log(`✅ Course ${courseId} updated for institute ${currentCourse.instituteId}`);
     
     res.json({ 
       message: 'Course updated successfully',
@@ -163,11 +174,11 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE course by ID - verify institution ownership
+// DELETE course by ID - verify institute ownership
 router.delete('/:id', async (req, res) => {
   try {
     const courseId = req.params.id;
-    const { institutionId } = req.query; // Should come from authenticated institute
+    const { instituteId } = req.query; // Changed to instituteId
     
     // Get the current course data
     const courseDoc = await db.collection('courses').doc(courseId).get();
@@ -177,14 +188,14 @@ router.delete('/:id', async (req, res) => {
     
     const course = courseDoc.data();
     
-    // Verify the course belongs to the institution making the request
-    if (institutionId && course.institutionId !== institutionId) {
-      return res.status(403).json({ error: 'Cannot delete course from another institution' });
+    // Verify the course belongs to the institute making the request
+    if (instituteId && course.instituteId !== instituteId) {
+      return res.status(403).json({ error: 'Cannot delete course from another institute' });
     }
 
     await db.collection('courses').doc(courseId).delete();
     
-    console.log(`🗑️ Course ${courseId} deleted from institution ${course.institutionId}`);
+    console.log(`🗑️ Course ${courseId} deleted from institute ${course.instituteId}`);
     
     res.json({ 
       message: 'Course deleted successfully',
@@ -196,7 +207,7 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// GET courses for students (public) - from ALL approved institutions
+// GET courses for students (public) - from ALL approved institutes
 router.get('/public/active', async (req, res) => {
   try {
     // First get all approved institutes
@@ -212,7 +223,7 @@ router.get('/public/active', async (req, res) => {
     
     // Get active courses from approved institutes
     const coursesSnapshot = await db.collection('courses')
-      .where('institutionId', 'in', approvedInstituteIds)
+      .where('instituteId', 'in', approvedInstituteIds) // Changed to instituteId
       .where('status', '==', 'active')
       .orderBy('name')
       .get();
@@ -222,7 +233,7 @@ router.get('/public/active', async (req, res) => {
       ...doc.data()
     }));
     
-    console.log(`🎓 Found ${courses.length} active courses from ${approvedInstituteIds.length} approved institutions`);
+    console.log(`🎓 Found ${courses.length} active courses from ${approvedInstituteIds.length} approved institutes`);
     res.json(courses);
   } catch (error) {
     console.error('Error fetching active courses:', error);
@@ -230,25 +241,25 @@ router.get('/public/active', async (req, res) => {
   }
 });
 
-// GET courses by institution ID (public) - for browsing specific institution courses
-router.get('/public/institution/:institutionId', async (req, res) => {
+// GET courses by institute ID (public) - for browsing specific institute courses
+router.get('/public/institute/:instituteId', async (req, res) => { // Changed to instituteId
   try {
-    const { institutionId } = req.params;
+    const { instituteId } = req.params; // Changed to instituteId
     
-    // Verify institution exists and is approved
-    const institutionDoc = await db.collection('institutes').doc(institutionId).get();
-    if (!institutionDoc.exists) {
-      return res.status(404).json({ error: 'Institution not found' });
+    // Verify institute exists and is approved
+    const instituteDoc = await db.collection('institutes').doc(instituteId).get();
+    if (!instituteDoc.exists) {
+      return res.status(404).json({ error: 'Institute not found' });
     }
     
-    const institution = institutionDoc.data();
-    if (institution.status !== 'approved') {
-      return res.status(403).json({ error: 'Institution not approved' });
+    const institute = instituteDoc.data();
+    if (institute.status !== 'approved') {
+      return res.status(403).json({ error: 'Institute not approved' });
     }
 
-    // Get active courses for this specific institution
+    // Get active courses for this specific institute
     const coursesSnapshot = await db.collection('courses')
-      .where('institutionId', '==', institutionId)
+      .where('instituteId', '==', instituteId) // Changed to instituteId
       .where('status', '==', 'active')
       .orderBy('name')
       .get();
@@ -258,10 +269,10 @@ router.get('/public/institution/:institutionId', async (req, res) => {
       ...doc.data()
     }));
 
-    console.log(`🏫 Found ${courses.length} active courses for institution ${institutionId}`);
+    console.log(`🏫 Found ${courses.length} active courses for institute ${instituteId}`);
     res.json(courses);
   } catch (error) {
-    console.error('Error fetching institution courses:', error);
+    console.error('Error fetching institute courses:', error);
     res.status(500).json({ error: 'Failed to fetch courses' });
   }
 });
