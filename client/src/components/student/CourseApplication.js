@@ -81,9 +81,9 @@ const CourseApplication = () => {
     }
   };
 
-  const handleApply = async (courseId, courseName, institutionId, institutionName) => {
+  const handleApply = async (courseId, courseName, institutionId) => {
     try {
-      // ✅ VALIDATE ALL FIELDS BEFORE SENDING - FIXED UNDEFINED VALUES
+      // ✅ VALIDATE ALL FIELDS BEFORE SENDING
       if (!courseId || !courseName || !institutionId) {
         alert('Missing required application information. Please try again.');
         return;
@@ -100,12 +100,13 @@ const CourseApplication = () => {
         body: JSON.stringify({
           studentId: currentUser.uid,
           courseId: courseId,
-          institutionId: institutionId,
+          instituteId: institutionId, // ✅ CHANGED: institutionId → instituteId
           courseName: courseName,
-          institutionName: institutionName || 'Unknown Institution', // Provide fallback
+          studentName: currentUser.displayName || 'Student', // ✅ ADDED: Required by backend
+          studentEmail: currentUser.email || '', // ✅ ADDED: Required by backend
           applicationDate: new Date().toISOString(),
-          status: 'pending', // Add default status
-          createdAt: new Date().toISOString() // Add timestamp
+          status: 'pending',
+          createdAt: new Date().toISOString()
         })
       });
 
@@ -128,7 +129,7 @@ const CourseApplication = () => {
     if (!Array.isArray(applications)) return false;
     
     return applications.filter(app => 
-      app.institutionId === institutionId && app.status !== 'rejected'
+      app.instituteId === institutionId && app.status !== 'rejected' // ✅ CHANGED: institutionId → instituteId
     ).length >= 2;
   };
 
@@ -202,7 +203,7 @@ const CourseApplication = () => {
             const appliedToInstitution = hasAppliedToInstitution(course.institutionId);
             const appliedToCourse = hasAppliedToCourse(course.id);
             const canApply = !appliedToCourse && 
-              (Array.isArray(applications) ? applications.filter(app => app.institutionId === course.institutionId).length < 2 : true);
+              (Array.isArray(applications) ? applications.filter(app => app.instituteId === course.institutionId).length < 2 : true); // ✅ CHANGED: institutionId → instituteId
 
             return (
               <div key={course.id} className="course-card">
@@ -235,8 +236,7 @@ const CourseApplication = () => {
                       onClick={() => handleApply(
                         course.id, 
                         course.name, 
-                        course.institutionId,
-                        course.institutionName
+                        course.institutionId
                       )}
                       className="btn"
                       disabled={!course.institutionId} // Disable if no institutionId
