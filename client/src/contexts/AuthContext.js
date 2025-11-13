@@ -22,8 +22,8 @@ export function AuthProvider({ children }) {
 
   // Get API URL from environment variable or use localhost for development
   const getApiUrl = () => {
-  return process.env.REACT_APP_API_URL || 'https://career-guidance-platform-3c0y.onrender.com';
-};
+    return process.env.REACT_APP_API_URL || 'https://career-guidance-platform-3c0y.onrender.com';
+  };
 
   const signup = async (email, password, userData) => {
     try {
@@ -90,31 +90,31 @@ export function AuthProvider({ children }) {
   };
 
   const fetchUserRole = async (uid) => {
-  try {
-    console.log('Fetching user role from backend...');
-    const token = await auth.currentUser.getIdToken();  // include token for backend auth
-    const response = await fetch(`${getApiUrl()}/api/auth/user/${uid}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+    try {
+      console.log('Fetching user role from backend...');
+      const token = await auth.currentUser.getIdToken();  // include token for backend auth
+      const response = await fetch(`${getApiUrl()}/api/auth/user/${uid}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('Response status:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    });
 
-    console.log('Response status:', response.status);
+      const userData = await response.json();
+      console.log('User data received:', userData);
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      return userData.role;
+    } catch (error) {
+      console.error('Failed to fetch user role:', error);
+      throw error;
     }
-
-    const userData = await response.json();
-    console.log('User data received:', userData);
-
-    return userData.role;
-  } catch (error) {
-    console.error('Failed to fetch user role:', error);
-    throw error;
-  }
-};
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
