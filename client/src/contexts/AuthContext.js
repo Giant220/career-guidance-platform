@@ -22,8 +22,8 @@ export function AuthProvider({ children }) {
 
   // Get API URL from environment variable or use localhost for development
   const getApiUrl = () => {
-    return process.env.REACT_APP_API_URL || 'http://localhost:5000';
-  };
+  return process.env.REACT_APP_API_URL || 'https://career-guidance-platform-3c0y.onrender.com';
+};
 
   const signup = async (email, password, userData) => {
     try {
