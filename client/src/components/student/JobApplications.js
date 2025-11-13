@@ -16,11 +16,31 @@ const JobApplications = () => {
 
   const fetchJobs = async () => {
     try {
-      const response = await fetch(`/api/students/${currentUser.uid}/jobs`);
+      // ✅ ADD AUTHENTICATION TOKEN
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/students/${currentUser.uid}/jobs`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
-      setJobs(data);
+      
+      // ✅ ENSURE DATA IS ALWAYS AN ARRAY
+      if (Array.isArray(data)) {
+        setJobs(data);
+      } else {
+        console.error('Invalid response format:', data);
+        setJobs([]);
+      }
     } catch (error) {
       console.error('Error fetching jobs:', error);
+      setJobs([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -28,24 +48,56 @@ const JobApplications = () => {
 
   const fetchJobApplications = async () => {
     try {
-      const response = await fetch(`/api/students/${currentUser.uid}/job-applications`);
+      // ✅ ADD AUTHENTICATION TOKEN
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/students/${currentUser.uid}/job-applications`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
-      setApplications(data);
+      
+      // ✅ ENSURE DATA IS ALWAYS AN ARRAY
+      if (Array.isArray(data)) {
+        setApplications(data);
+      } else {
+        console.error('Invalid response format:', data);
+        setApplications([]);
+      }
     } catch (error) {
       console.error('Error fetching job applications:', error);
+      setApplications([]); // Set empty array on error
     }
   };
 
   const checkQualification = async (jobId) => {
     setCheckingQualification(jobId);
     try {
-      const response = await fetch(`/api/students/${currentUser.uid}/jobs/${jobId}/qualify`);
+      // ✅ ADD AUTHENTICATION TOKEN
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/students/${currentUser.uid}/jobs/${jobId}/qualify`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       if (data.qualified) {
         await handleApply(jobId);
       } else {
-        alert(`You do not qualify for this job:\n\n${data.reason}`);
+        alert(`You do not qualify for this job:\n\n${data.reason || 'Unknown reason'}`);
       }
     } catch (error) {
       console.error('Error checking qualification:', error);
@@ -57,8 +109,14 @@ const JobApplications = () => {
 
   const handleApply = async (jobId) => {
     try {
+      // ✅ ADD AUTHENTICATION TOKEN
+      const token = await currentUser.getIdToken();
       const response = await fetch(`/api/students/${currentUser.uid}/jobs/${jobId}/apply`, {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
       const result = await response.json();
@@ -77,25 +135,41 @@ const JobApplications = () => {
   };
 
   const hasApplied = (jobId) => {
+    if (!Array.isArray(applications)) return false;
     return applications.some(app => app.jobId === jobId);
   };
 
   const hasTranscripts = async () => {
     try {
-      const response = await fetch(`/api/students/${currentUser.uid}/transcripts`);
+      // ✅ ADD AUTHENTICATION TOKEN
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/students/${currentUser.uid}/transcripts`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const transcripts = await response.json();
-      return transcripts.length > 0;
+      return Array.isArray(transcripts) && transcripts.length > 0;
     } catch (error) {
       console.error('Error checking transcripts:', error);
       return false;
     }
   };
 
-  const filteredJobs = jobs.filter(job => {
-    if (filter === 'applied') return hasApplied(job.id);
-    if (filter === 'new') return !hasApplied(job.id);
-    return true;
-  });
+  // ✅ SAFE FILTERING
+  const filteredJobs = Array.isArray(jobs) 
+    ? jobs.filter(job => {
+        if (filter === 'applied') return hasApplied(job.id);
+        if (filter === 'new') return !hasApplied(job.id);
+        return true;
+      })
+    : [];
 
   if (loading) {
     return <div className="section">Loading jobs...</div>;
@@ -128,16 +202,16 @@ const JobApplications = () => {
             return (
               <div key={job.id} className="job-card">
                 <div className="job-header">
-                  <h3>{job.title}</h3>
+                  <h3>{job.title || 'Untitled Job'}</h3>
                   {applied && (
                     <span className="status-badge status-applied">Applied</span>
                   )}
                 </div>
                 
-                <p className="company">{job.companyName}</p>
-                <p className="location">{job.location}</p>
-                <p className="salary">Salary: {job.salary}</p>
-                <p className="job-type">Type: {job.type}</p>
+                <p className="company">{job.companyName || 'Unknown Company'}</p>
+                <p className="location">{job.location || 'Location not specified'}</p>
+                <p className="salary">Salary: {job.salary || 'Not specified'}</p>
+                <p className="job-type">Type: {job.type || 'Not specified'}</p>
                 
                 {job.deadline && (
                   <p className="deadline">
@@ -146,19 +220,19 @@ const JobApplications = () => {
                 )}
                 
                 <div className="job-description">
-                  <p>{job.description}</p>
+                  <p>{job.description || 'No description available'}</p>
                 </div>
 
                 <div className="requirements">
                   <h4>Requirements:</h4>
                   <ul>
-                    {job.requirements && job.requirements.map((req, index) => (
+                    {Array.isArray(job.requirements) ? job.requirements.map((req, index) => (
                       <li key={index}>{req}</li>
-                    ))}
+                    )) : <li>No specific requirements listed</li>}
                   </ul>
                 </div>
 
-                {job.qualifications && job.qualifications.length > 0 && (
+                {Array.isArray(job.qualifications) && job.qualifications.length > 0 && (
                   <div className="qualifications">
                     <h4>Preferred Qualifications:</h4>
                     <ul>
@@ -192,25 +266,28 @@ const JobApplications = () => {
         {filteredJobs.length === 0 && (
           <div className="text-center">
             <p>No jobs found matching your criteria.</p>
+            <button onClick={fetchJobs} className="btn btn-secondary mt-1">
+              Refresh Jobs
+            </button>
           </div>
         )}
       </div>
 
-      {applications.length > 0 && (
+      {Array.isArray(applications) && applications.length > 0 && (
         <div className="section">
           <h3>Your Job Applications</h3>
           <div className="applications-list">
             {applications.map(application => (
               <div key={application.id} className="application-card">
                 <div className="application-info">
-                  <h4>{application.jobTitle}</h4>
-                  <p>{application.companyName}</p>
-                  <span className={`status-badge status-${application.status}`}>
-                    {application.status}
+                  <h4>{application.jobTitle || 'Unknown Job'}</h4>
+                  <p>{application.companyName || 'Unknown Company'}</p>
+                  <span className={`status-badge status-${application.status || 'pending'}`}>
+                    {application.status || 'pending'}
                   </span>
                 </div>
                 <div className="application-date">
-                  Applied: {new Date(application.applicationDate).toLocaleDateString()}
+                  Applied: {application.applicationDate ? new Date(application.applicationDate).toLocaleDateString() : 'Unknown date'}
                 </div>
               </div>
             ))}
