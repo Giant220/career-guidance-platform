@@ -13,7 +13,6 @@ const InstituteDashboard = () => {
   const [institute, setInstitute] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const navigate = useNavigate();
   const pollIntervalRef = useRef();
 
   const fetchUserInstitute = async (showLoading = true) => {
@@ -25,8 +24,7 @@ const InstituteDashboard = () => {
     try {
       if (showLoading) setLoading(true);
       const token = await currentUser.getIdToken();
-      
-      console.log('🔄 Fetching institutes...');
+
       const response = await fetch('/api/institutes', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -34,78 +32,61 @@ const InstituteDashboard = () => {
         }
       });
 
-      console.log('📡 Response status:', response.status);
-      
       if (response.ok) {
         const allInstitutes = await response.json();
-        console.log('📊 All institutes from API:', allInstitutes);
-        
-        // Find institute that belongs to current user
         const userInstitute = allInstitutes.find(inst => 
           inst.userId === currentUser.uid || inst.email === currentUser.email
         );
-        
-        console.log('🎯 User institute found:', userInstitute);
-        
-        // Check if status changed
+
+        // Detect status changes
         if (userInstitute && institute && userInstitute.status !== institute.status) {
-          console.log('🎉 STATUS CHANGED!', institute.status, '→', userInstitute.status);
-          // Show alert for status change
           if (userInstitute.status === 'approved') {
             alert('🎉 Your institute has been approved! You can now manage courses and applications.');
           } else if (userInstitute.status === 'rejected') {
             alert(`❌ Your institute has been rejected. Reason: ${userInstitute.rejectionReason || 'No reason provided'}`);
           }
         }
-        
-        setInstitute(userInstitute || null);
+
+        // Update state only if there's a change
+        setInstitute(prev => {
+          if (!prev || JSON.stringify(prev) !== JSON.stringify(userInstitute)) {
+            return userInstitute || null;
+          }
+          return prev;
+        });
+
         setLastUpdate(new Date().toISOString());
       } else {
-        console.error('❌ Failed to fetch institutes:', response.status);
-        const errorText = await response.text();
-        console.error('Error details:', errorText);
+        console.error('Failed to fetch institutes:', response.status);
       }
     } catch (error) {
-      console.error('❌ Error fetching institutes:', error);
+      console.error('Error fetching institutes:', error);
       setInstitute(null);
     } finally {
       if (showLoading) setLoading(false);
     }
   };
 
-  // Setup polling for real-time updates
+  // Polling
   const startPolling = () => {
-    // Clear existing interval
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-    }
-    
-    // Poll every 5 seconds if institute is pending, every 30 seconds if approved
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+
     const interval = institute?.status === 'pending' ? 5000 : 30000;
-    
-    console.log(`🔄 Starting polling every ${interval/1000} seconds`);
-    
+
     pollIntervalRef.current = setInterval(() => {
-      console.log('🔄 Polling for institute updates...');
-      fetchUserInstitute(false); // Don't show loading on polls
+      fetchUserInstitute(false);
     }, interval);
   };
 
   useEffect(() => {
     fetchUserInstitute();
-    
-    // Start polling when component mounts
     startPolling();
-    
-    // Cleanup interval on unmount
+
     return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
   }, [currentUser]);
 
-  // Restart polling when institute status changes
   useEffect(() => {
     startPolling();
   }, [institute?.status]);
@@ -120,12 +101,14 @@ const InstituteDashboard = () => {
   };
 
   const updateInstitute = (instituteData) => {
-    console.log('📝 Updating institute in dashboard:', instituteData);
-    setInstitute(instituteData);
+    setInstitute(prev => ({
+      ...prev,
+      ...instituteData,
+      status: instituteData.status || prev?.status
+    }));
   };
 
   const refreshInstituteData = () => {
-    console.log('🔄 Manual refresh triggered');
     fetchUserInstitute(true);
   };
 
@@ -144,9 +127,7 @@ const InstituteDashboard = () => {
       <nav className="navbar">
         <div className="logo-area">
           <div className="logo" style={{ backgroundColor: '#ffda77', opacity: 0 }}></div>
-          <span className="brand">
-            {institute?.name || 'Institute Portal'}
-          </span>
+          <span className="brand">{institute?.name || 'Institute Portal'}</span>
         </div>
         <div className="nav-links">
           <Link to="/institute">Dashboard</Link>
@@ -295,14 +276,10 @@ const InstituteHome = ({ institute, currentUser, onRefresh, lastUpdate }) => {
             <div>
               <h1>Welcome, {institute?.name || 'Institute'}</h1>
               <p>{institute?.description || 'Manage your institution and student applications'}</p>
-              {lastUpdate && (
-                <small>Last updated: {new Date(lastUpdate).toLocaleTimeString()}</small>
-              )}
+              {lastUpdate && <small>Last updated: {new Date(lastUpdate).toLocaleTimeString()}</small>}
             </div>
             <div className="header-actions">
-              <button onClick={onRefresh} className="btn btn-secondary">
-                🔄 Refresh Now
-              </button>
+              <button onClick={onRefresh} className="btn btn-secondary">🔄 Refresh Now</button>
             </div>
           </div>
           <div className={`status-badge status-${institute?.status || 'pending'}`}>
@@ -372,19 +349,13 @@ const InstituteHome = ({ institute, currentUser, onRefresh, lastUpdate }) => {
                 <h3>⚠️ Pending Approval</h3>
                 <p>Your institution is currently under review. You will be able to manage applications once approved by the system administrator.</p>
                 <p><strong>Current Status:</strong> {institute?.status || 'pending'}</p>
-                {institute?.createdAt && (
-                  <p><strong>Registered:</strong> {new Date(institute.createdAt).toLocaleDateString()}</p>
-                )}
+                {institute?.createdAt && <p><strong>Registered:</strong> {new Date(institute.createdAt).toLocaleDateString()}</p>}
               </div>
-              <button onClick={onRefresh} className="btn">
-                🔄 Check Status
-              </button>
+              <button onClick={onRefresh} className="btn">🔄 Check Status</button>
             </div>
             <div className="refresh-info">
               <small>Status updates automatically every 5 seconds, or click "Check Status" to refresh now.</small>
-              {lastUpdate && (
-                <small>Last checked: {new Date(lastUpdate).toLocaleTimeString()}</small>
-              )}
+              {lastUpdate && <small>Last checked: {new Date(lastUpdate).toLocaleTimeString()}</small>}
             </div>
           </div>
         )}
@@ -393,27 +364,20 @@ const InstituteHome = ({ institute, currentUser, onRefresh, lastUpdate }) => {
           <div className="section success-message">
             <h3>✅ Institute Approved</h3>
             <p>Your institution has been approved! You can now manage courses and process student applications.</p>
-            {institute?.approvedAt && (
-              <p><strong>Approved On:</strong> {new Date(institute.approvedAt).toLocaleDateString()}</p>
-            )}
+            {institute?.approvedAt && <p><strong>Approved On:</strong> {new Date(institute.approvedAt).toLocaleDateString()}</p>}
             <div className="action-buttons">
-              <Link to="/institute/courses" className="btn btn-primary">
-                Start Managing Courses
-              </Link>
+              <Link to="/institute/courses" className="btn btn-primary">Start Managing Courses</Link>
             </div>
           </div>
         )}
 
-        {/* Debug Information */}
         <div className="section debug-info" style={{background: '#f8f9fa', fontSize: '0.8rem'}}>
           <h4>Debug Information</h4>
           <p><strong>Institute ID:</strong> {institute.id}</p>
           <p><strong>Status:</strong> {institute.status}</p>
           <p><strong>User ID:</strong> {currentUser?.uid}</p>
           <p><strong>Last Update:</strong> {lastUpdate}</p>
-          <button onClick={onRefresh} className="btn btn-secondary" style={{fontSize: '0.8rem'}}>
-            Force Refresh
-          </button>
+          <button onClick={onRefresh} className="btn btn-secondary" style={{fontSize: '0.8rem'}}>Force Refresh</button>
         </div>
       </div>
     </div>
