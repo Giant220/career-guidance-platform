@@ -81,8 +81,14 @@ const CourseApplication = () => {
     }
   };
 
-  const handleApply = async (courseId, courseName, institutionId) => {
+  const handleApply = async (courseId, courseName, institutionId, institutionName) => {
     try {
+      // ✅ VALIDATE ALL FIELDS BEFORE SENDING - FIXED UNDEFINED VALUES
+      if (!courseId || !courseName || !institutionId) {
+        alert('Missing required application information. Please try again.');
+        return;
+      }
+
       // ✅ ADD AUTHENTICATION TOKEN
       const token = await currentUser.getIdToken();
       const response = await fetch('/api/applications', {
@@ -96,7 +102,10 @@ const CourseApplication = () => {
           courseId: courseId,
           institutionId: institutionId,
           courseName: courseName,
-          applicationDate: new Date().toISOString()
+          institutionName: institutionName || 'Unknown Institution', // Provide fallback
+          applicationDate: new Date().toISOString(),
+          status: 'pending', // Add default status
+          createdAt: new Date().toISOString() // Add timestamp
         })
       });
 
@@ -111,7 +120,7 @@ const CourseApplication = () => {
       }
     } catch (error) {
       console.error('Error applying:', error);
-      alert('Error submitting application');
+      alert('Error submitting application: ' + error.message);
     }
   };
 
@@ -223,8 +232,14 @@ const CourseApplication = () => {
                     </button>
                   ) : (
                     <button 
-                      onClick={() => handleApply(course.id, course.name, course.institutionId)}
+                      onClick={() => handleApply(
+                        course.id, 
+                        course.name, 
+                        course.institutionId,
+                        course.institutionName
+                      )}
                       className="btn"
+                      disabled={!course.institutionId} // Disable if no institutionId
                     >
                       Apply Now
                     </button>
