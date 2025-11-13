@@ -62,10 +62,12 @@ const CompanyProfile = ({ company, onUpdate }) => {
 
     setSaving(true);
     try {
+      const token = await currentUser.getIdToken();
       const response = await fetch('/api/companies/profile', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           companyId: currentUser.uid,
@@ -73,14 +75,18 @@ const CompanyProfile = ({ company, onUpdate }) => {
         })
       });
 
+      const result = await response.json();
+
       if (response.ok) {
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
         onUpdate();
+      } else {
+        alert(`Error: ${result.error || 'Failed to save profile'}`);
       }
     } catch (error) {
       console.error('Error saving profile:', error);
-      alert('Error saving profile');
+      alert('Error saving profile: ' + error.message);
     } finally {
       setSaving(false);
     }
