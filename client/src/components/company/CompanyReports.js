@@ -1,19 +1,31 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 
-const CompanyReports = ({ company }) => {
+const CompanyReports = ({ company, currentUser }) => {
   const [reports, setReports] = useState({});
   const [timeRange, setTimeRange] = useState('current_year');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (company) {
+    if (company && currentUser) {
       fetchReports();
     }
-  }, [company, timeRange]);
+  }, [company, currentUser, timeRange]);
 
   const fetchReports = async () => {
     try {
-      const response = await fetch(`/api/companies/${company.id}/reports?range=${timeRange}`);
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/companies/${company.id}/reports?range=${timeRange}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setReports(data);
     } catch (error) {
@@ -103,29 +115,33 @@ const CompanyReports = ({ company }) => {
       <div className="section">
         <h3>Job-wise Statistics</h3>
         <div className="job-stats">
-          {reports.jobStats?.map((job, index) => (
-            <div key={index} className="job-stat-card">
-              <h4>{job.jobTitle}</h4>
-              <div className="stat-details">
-                <div className="stat-item">
-                  <span>Applications:</span>
-                  <strong>{job.applicationCount}</strong>
-                </div>
-                <div className="stat-item">
-                  <span>Shortlisted:</span>
-                  <strong>{job.shortlistedCount}</strong>
-                </div>
-                <div className="stat-item">
-                  <span>Hired:</span>
-                  <strong>{job.hiredCount}</strong>
-                </div>
-                <div className="stat-item">
-                  <span>Success Rate:</span>
-                  <strong>{job.successRate}%</strong>
+          {Array.isArray(reports.jobStats) && reports.jobStats.length > 0 ? (
+            reports.jobStats.map((job, index) => (
+              <div key={index} className="job-stat-card">
+                <h4>{job.jobTitle}</h4>
+                <div className="stat-details">
+                  <div className="stat-item">
+                    <span>Applications:</span>
+                    <strong>{job.applicationCount}</strong>
+                  </div>
+                  <div className="stat-item">
+                    <span>Shortlisted:</span>
+                    <strong>{job.shortlistedCount}</strong>
+                  </div>
+                  <div className="stat-item">
+                    <span>Hired:</span>
+                    <strong>{job.hiredCount}</strong>
+                  </div>
+                  <div className="stat-item">
+                    <span>Success Rate:</span>
+                    <strong>{job.successRate}%</strong>
+                  </div>
                 </div>
               </div>
-            </div>
-          )) || <p>No job statistics available.</p>}
+            ))
+          ) : (
+            <p>No job statistics available.</p>
+          )}
         </div>
       </div>
 
@@ -192,15 +208,19 @@ const CompanyReports = ({ company }) => {
       <div className="section">
         <h3>Hiring Insights</h3>
         <div className="insights-list">
-          {reports.insights?.map((insight, index) => (
-            <div key={index} className="insight-card">
-              <div className="insight-icon">📊</div>
-              <div className="insight-content">
-                <p>{insight.message}</p>
-                <small>{insight.type}</small>
+          {Array.isArray(reports.insights) && reports.insights.length > 0 ? (
+            reports.insights.map((insight, index) => (
+              <div key={index} className="insight-card">
+                <div className="insight-icon">📊</div>
+                <div className="insight-content">
+                  <p>{insight.message}</p>
+                  <small>{insight.type}</small>
+                </div>
               </div>
-            </div>
-          )) || <p>No insights available yet. Data will appear as you process more applications.</p>}
+            ))
+          ) : (
+            <p>No insights available yet. Data will appear as you process more applications.</p>
+          )}
         </div>
       </div>
     </div>
