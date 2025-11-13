@@ -161,6 +161,14 @@ try {
   console.error('❌ Failed to load jobs route:', error);
 }
 
+// ✅ ADD COURSES ROUTE - This is the key addition
+try {
+  console.log('✅ Loading courses route...');
+  app.use('/api/courses', auth, require('./routes/courses'));
+} catch (error) {
+  console.error('❌ Failed to load courses route:', error);
+}
+
 // Health check endpoint (public)
 app.get('/api/health', (req, res) => {
   console.log('✅ Health check passed on Render');
@@ -208,4 +216,5 @@ app.listen(PORT, () => {
   console.log(`🌐 App URL: https://career-guidance-platform-3c0y.onrender.com`);
   console.log(`🔍 Test API: https://career-guidance-platform-3c0y.onrender.com/api/deploy-test`);
   console.log(`🔍 Health check: https://career-guidance-platform-3c0y.onrender.com/api/health`);
+  console.log(`📚 Courses API: https://career-guidance-platform-3c0y.onrender.com/api/courses`);
 });
