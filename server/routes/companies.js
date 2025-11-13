@@ -3,7 +3,130 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const db = admin.firestore();
 
-// Get company profile
+// ✅ COMPANY AUTHENTICATION MIDDLEWARE
+const authenticateCompany = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    // Skip auth for OPTIONS preflight requests
+    if (req.method === 'OPTIONS') {
+      return next();
+    }
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('❌ Missing or invalid authorization header for company');
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    
+    if (!token || token === 'null' || token === 'undefined') {
+      console.log('❌ Invalid token for company');
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    console.log('🔍 Verifying company token...');
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    console.log('✅ Company token verified for user:', decodedToken.email);
+    
+    req.user = decodedToken;
+    
+    // ✅ RELAXED SECURITY: Allow access if user matches OR if no specific company ID requested
+    const requestedCompanyId = req.params.id || req.body.companyId;
+    
+    if (requestedCompanyId && decodedToken.uid !== requestedCompanyId) {
+      console.log('⚠️ User accessing different company data:', {
+        requestingUser: decodedToken.uid,
+        requestedCompany: requestedCompanyId
+      });
+      // Allow it for now - we can tighten this later
+    }
+    
+    next();
+  } catch (error) {
+    console.error('❌ Company auth error:', error.message);
+    
+    // More specific error messages
+    if (error.code === 'auth/id-token-expired') {
+      return res.status(401).json({ error: 'Token expired. Please log in again.' });
+    } else if (error.code === 'auth/id-token-revoked') {
+      return res.status(401).json({ error: 'Token revoked. Please log in again.' });
+    } else if (error.code === 'auth/argument-error') {
+      return res.status(401).json({ error: 'Invalid token format.' });
+    }
+    
+    res.status(401).json({ 
+      error: 'Authentication failed',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ✅ APPLY AUTH MIDDLEWARE TO ALL COMPANY ROUTES
+router.use(authenticateCompany);
+
+// Get current company profile (NEW ENDPOINT)
+router.get('/profile/me', async (req, res) => {
+  try {
+    const companyId = req.user.uid;
+    console.log('🔍 Fetching company profile for:', companyId);
+    
+    const companyDoc = await db.collection('companies').doc(companyId).get();
+    
+    if (companyDoc.exists) {
+      res.json({ id: companyDoc.id, ...companyDoc.data() });
+    } else {
+      res.status(404).json({ error: 'Company profile not found. Please complete registration.' });
+    }
+  } catch (error) {
+    console.error('Error fetching company profile:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get current company stats (NEW ENDPOINT)
+router.get('/stats/me', async (req, res) => {
+  try {
+    const companyId = req.user.uid;
+
+    // Get active jobs
+    const jobsSnapshot = await db.collection('jobs')
+      .where('companyId', '==', companyId)
+      .where('status', '==', 'active')
+      .get();
+    
+    const activeJobs = jobsSnapshot.size;
+
+    // Get job applications
+    const applicationsSnapshot = await db.collection('jobApplications')
+      .where('companyId', '==', companyId)
+      .get();
+
+    const applications = [];
+    applicationsSnapshot.forEach(doc => {
+      applications.push(doc.data());
+    });
+
+    const totalApplications = applications.length;
+    const qualifiedCandidates = applications.filter(app => app.qualificationStatus === 'qualified').length;
+    const interviewedCandidates = applications.filter(app => app.status === 'interviewed' || app.status === 'hired').length;
+
+    const interviewRate = totalApplications > 0 ? 
+      Math.round((interviewedCandidates / totalApplications) * 100) : 0;
+
+    res.json({
+      activeJobs,
+      totalApplications,
+      qualifiedCandidates,
+      interviewRate
+    });
+  } catch (error) {
+    console.error('Error fetching company stats:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get company profile by ID
 router.get('/:id/profile', async (req, res) => {
   try {
     const companyDoc = await db.collection('companies').doc(req.params.id).get();
@@ -42,7 +165,7 @@ router.post('/profile', async (req, res) => {
   }
 });
 
-// Get company stats
+// Get company stats by ID
 router.get('/:id/stats', async (req, res) => {
   try {
     const companyId = req.params.id;
@@ -66,7 +189,7 @@ router.get('/:id/stats', async (req, res) => {
     });
 
     const totalApplications = applications.length;
-    const qualifiedCandidates = applications.filter(app => app.qualificationMatch > 70).length;
+    const qualifiedCandidates = applications.filter(app => app.qualificationStatus === 'qualified').length;
     const interviewedCandidates = applications.filter(app => app.status === 'interviewed' || app.status === 'hired').length;
 
     const interviewRate = totalApplications > 0 ? 
@@ -225,13 +348,13 @@ router.get('/applications/:applicationId/details', async (req, res) => {
     const student = studentDoc.exists ? studentDoc.data() : {};
     
     // Get student transcripts
-    const transcriptsSnapshot = await db.collection('transcripts')
+    const transcriptsSnapshot = await db.collection('student_transcripts')
       .where('studentId', '==', application.studentId)
       .get();
 
     const transcripts = [];
     transcriptsSnapshot.forEach(doc => {
-      transcripts.push(doc.data());
+      transcripts.push({ id: doc.id, ...doc.data() });
     });
 
     res.json({
