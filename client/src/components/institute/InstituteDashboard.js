@@ -10,6 +10,7 @@ import './InstituteDashboard.css';
 
 const InstituteDashboard = () => {
   const { currentUser, logout } = useAuth();
+  const navigate = useNavigate(); // ✅ Fix for logout error
   const [institute, setInstitute] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);
@@ -25,7 +26,9 @@ const InstituteDashboard = () => {
       if (showLoading) setLoading(true);
       const token = await currentUser.getIdToken();
 
-      const response = await fetch('/api/institutes', {
+      // ✅ Updated to full deployed backend URL
+      const BACKEND_URL = 'https://career-guidance-platform-3c0y.onrender.com';
+      const response = await fetch(`${BACKEND_URL}/api/institutes`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -47,7 +50,6 @@ const InstituteDashboard = () => {
           }
         }
 
-        // Update state only if there's a change
         setInstitute(prev => {
           if (!prev || JSON.stringify(prev) !== JSON.stringify(userInstitute)) {
             return userInstitute || null;
@@ -94,7 +96,7 @@ const InstituteDashboard = () => {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/');
+      navigate('/'); // ✅ Works now
     } catch (error) {
       console.error('Failed to logout:', error);
     }
