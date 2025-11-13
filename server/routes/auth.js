@@ -75,7 +75,7 @@ router.post('/signup', async (req, res) => {
         updatedAt: new Date().toISOString()
       };
 
-      await db.collection('institutions').doc(uid).set(institutionData);
+      await db.collection('institutes').doc(uid).set(institutionData);
       console.log('✅ Institution record created with ID:', uid);
     }
 
