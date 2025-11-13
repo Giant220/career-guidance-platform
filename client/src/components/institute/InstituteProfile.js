@@ -30,10 +30,7 @@ const InstituteProfile = ({ institute, onInstituteUpdate, onRefresh }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setProfile(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setProfile(prev => ({ ...prev, [name]: value }));
     setSaved(false);
   };
 
@@ -43,22 +40,15 @@ const InstituteProfile = ({ institute, onInstituteUpdate, onRefresh }) => {
       value = '+266' + value.replace(/^\+266/, '');
     }
     if (value.length <= 12) {
-      setProfile(prev => ({
-        ...prev,
-        phone: value
-      }));
+      setProfile(prev => ({ ...prev, phone: value }));
       setSaved(false);
     }
   };
 
-  const validatePhone = (phone) => {
-    const phoneRegex = /^\+266[0-9]{8}$/;
-    return phoneRegex.test(phone);
-  };
+  const validatePhone = (phone) => /^\+266[0-9]{8}$/.test(phone);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     if (!validatePhone(profile.phone)) {
       alert('Please enter a valid Lesotho phone number starting with +266 followed by 8 digits');
       return;
@@ -67,48 +57,31 @@ const InstituteProfile = ({ institute, onInstituteUpdate, onRefresh }) => {
     setSaving(true);
     try {
       const token = await currentUser.getIdToken();
-      
-      let response;
-      let url;
-      let method;
-      
-      if (institute) {
-        url = `/api/institutes/${institute.id}`;
-        method = 'PUT';
-      } else {
-        url = '/api/institutes';
-        method = 'POST';
-      }
 
-      const requestBody = {
-        ...profile,
-        userId: currentUser.uid
-      };
+      const url = institute ? `/api/institutes/${institute.id}` : '/api/institutes';
+      const method = institute ? 'PUT' : 'POST';
 
-      response = await fetch(url, {
-        method: method,
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({ ...profile, userId: currentUser.uid })
       });
 
       if (response.ok) {
         const result = await response.json();
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
-        
+
+        // ✅ FIX: Always use API response to update dashboard state
         if (onInstituteUpdate) {
-          if (institute) {
-            onInstituteUpdate({ ...institute, ...profile });
-          } else {
-            onInstituteUpdate({ id: result.id, ...profile, userId: currentUser.uid, status: 'pending' });
-          }
+          onInstituteUpdate(result);
         }
       } else {
         const errorText = await response.text();
-        throw new Error(`Failed to save profile: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to save profile: ${response.status} ${response.statusText} ${errorText}`);
       }
     } catch (error) {
       console.error('Error saving profile:', error);
