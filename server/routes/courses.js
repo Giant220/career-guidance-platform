@@ -3,59 +3,51 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const db = admin.firestore();
 
-// GET courses - STRICTLY filtered by instituteId (matching frontend)
+// GET courses - SIMPLIFIED and robust
 router.get('/', async (req, res) => {
   try {
-    const { instituteId, status } = req.query;
+    const { instituteId } = req.query;
     
-    console.log('🔍 Fetching courses for institute:', instituteId);
+    console.log('🔍 GET /api/courses - instituteId:', instituteId);
     
-    // instituteId is REQUIRED - courses belong to specific institutes
     if (!instituteId) {
-      return res.status(400).json({ error: 'instituteId is required' });
+      return res.status(400).json({ error: 'instituteId query parameter is required' });
     }
 
-    let query = db.collection('courses')
-      .where('instituteId', '==', instituteId);
+    // SIMPLE query without complex filtering first
+    const snapshot = await db.collection('courses')
+      .where('instituteId', '==', instituteId)
+      .get();
 
-    // Optional status filter
-    if (status && status !== 'all') {
-      query = query.where('status', '==', status);
-    }
+    const courses = [];
+    snapshot.forEach(doc => {
+      courses.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
 
-    const snapshot = await query.orderBy('createdAt', 'desc').get();
-    const courses = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-
-    console.log(`📚 Found ${courses.length} courses for institute ${instituteId}`);
-    res.status(200).json(courses);
+    console.log(`✅ Found ${courses.length} courses for institute ${instituteId}`);
+    res.json(courses);
 
   } catch (error) {
-    console.error('❌ Error fetching courses:', error);
-    res.status(500).json({ error: 'Failed to fetch courses: ' + error.message });
+    console.error('❌ CRITICAL ERROR in GET /api/courses:', error);
+    console.error('Error stack:', error.stack);
+    
+    // Return specific error message
+    res.status(500).json({ 
+      error: 'Internal server error while fetching courses',
+      message: error.message,
+      code: error.code
+    });
   }
 });
 
-// GET single course by ID
-router.get('/:id', async (req, res) => {
-  try {
-    const doc = await db.collection('courses').doc(req.params.id).get();
-    if (!doc.exists) {
-      return res.status(404).json({ error: 'Course not found' });
-    }
-
-    res.json({ id: doc.id, ...doc.data() });
-  } catch (error) {
-    console.error('Error fetching course:', error);
-    res.status(500).json({ error: 'Failed to fetch course' });
-  }
-});
-
-// CREATE new course - handle field mapping properly
+// CREATE new course - SIMPLIFIED
 router.post('/', async (req, res) => {
   try {
+    console.log('🔍 POST /api/courses - Request body:', JSON.stringify(req.body));
+    
     const {
       name,
       faculty,
@@ -66,62 +58,73 @@ router.post('/', async (req, res) => {
       requirements,
       careerPaths,
       intake,
-      institutionId, // From frontend
-      institutionName // From frontend
+      institutionId,
+      institutionName
     } = req.body;
 
-    console.log('🔍 Creating course with data:', { name, faculty, institutionId });
-
-    // Validate required fields
+    // Basic validation
     if (!name || !faculty || !duration || !fees || !description || !institutionId) {
       return res.status(400).json({ 
-        error: 'Missing required fields: name, faculty, duration, fees, description, institutionId' 
+        error: 'Missing required fields. Required: name, faculty, duration, fees, description, institutionId' 
       });
     }
 
-    // Verify the institute exists
-    const instituteDoc = await db.collection('institutes').doc(institutionId).get();
-    if (!instituteDoc.exists) {
-      return res.status(404).json({ error: 'Institute not found' });
-    }
-
-    const instituteData = instituteDoc.data();
-
     const courseData = {
-      name,
-      faculty,
-      duration,
-      fees,
-      credits: credits || '',
-      description,
-      requirements: requirements && Array.isArray(requirements) ? requirements.filter(req => req.trim() !== '') : [],
-      careerPaths: careerPaths && Array.isArray(careerPaths) ? careerPaths.filter(path => path.trim() !== '') : [],
-      intake: intake || '',
-      // Store with consistent field names
-      instituteId: institutionId, // Map to instituteId
-      instituteName: institutionName || instituteData.name,
+      name: name.toString().trim(),
+      faculty: faculty.toString().trim(),
+      duration: duration.toString().trim(),
+      fees: fees.toString().trim(),
+      credits: credits ? credits.toString().trim() : '',
+      description: description.toString().trim(),
+      requirements: Array.isArray(requirements) ? requirements.filter(r => r && r.toString().trim()) : [],
+      careerPaths: Array.isArray(careerPaths) ? careerPaths.filter(c => c && c.toString().trim()) : [],
+      intake: intake ? intake.toString().trim() : '',
+      instituteId: institutionId, // Map to backend field
+      instituteName: institutionName || 'Unknown Institute',
       status: 'pending',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
+    console.log('✅ Course data to save:', courseData);
+
     const docRef = await db.collection('courses').add(courseData);
+    const courseId = docRef.id;
 
-    console.log(`✅ Created new course for institute ${institutionId}: ${name}`);
+    console.log(`✅ Course created successfully: ${courseId}`);
 
-    // Return data in format frontend expects
     res.status(201).json({ 
-      id: docRef.id, 
+      id: courseId,
       ...courseData,
       message: 'Course created successfully' 
     });
+
   } catch (error) {
-    console.error('❌ Error creating course:', error);
-    res.status(500).json({ error: 'Failed to create course: ' + error.message });
+    console.error('❌ CRITICAL ERROR in POST /api/courses:', error);
+    console.error('Error stack:', error.stack);
+    
+    res.status(500).json({ 
+      error: 'Internal server error while creating course',
+      message: error.message
+    });
   }
 });
 
-// UPDATE course by ID
+// GET single course
+router.get('/:id', async (req, res) => {
+  try {
+    const doc = await db.collection('courses').doc(req.params.id).get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (error) {
+    console.error('Error fetching course:', error);
+    res.status(500).json({ error: 'Failed to fetch course' });
+  }
+});
+
+// UPDATE course
 router.put('/:id', async (req, res) => {
   try {
     const courseId = req.params.id;
@@ -130,15 +133,7 @@ router.put('/:id', async (req, res) => {
       updatedAt: new Date().toISOString() 
     };
 
-    console.log('🔍 Updating course:', courseId, 'with data:', updateData);
-
-    // Get the current course data
-    const courseDoc = await db.collection('courses').doc(courseId).get();
-    if (!courseDoc.exists) {
-      return res.status(404).json({ error: 'Course not found' });
-    }
-
-    // Handle field mapping if frontend sends institutionId
+    // Handle field mapping
     if (updateData.institutionId) {
       updateData.instituteId = updateData.institutionId;
       delete updateData.institutionId;
@@ -148,146 +143,72 @@ router.put('/:id', async (req, res) => {
       delete updateData.institutionName;
     }
 
-    // Clean up arrays
-    if (updateData.requirements && Array.isArray(updateData.requirements)) {
-      updateData.requirements = updateData.requirements.filter(req => req.trim() !== '');
-    }
-    if (updateData.careerPaths && Array.isArray(updateData.careerPaths)) {
-      updateData.careerPaths = updateData.careerPaths.filter(path => path.trim() !== '');
-    }
-
     await db.collection('courses').doc(courseId).update(updateData);
-    
-    console.log(`✅ Course ${courseId} updated successfully`);
     
     res.json({ 
       message: 'Course updated successfully',
       id: courseId
     });
   } catch (error) {
-    console.error('❌ Error updating course:', error);
-    res.status(500).json({ error: 'Failed to update course: ' + error.message });
+    console.error('Error updating course:', error);
+    res.status(500).json({ error: 'Failed to update course' });
   }
 });
 
-// DELETE course by ID
+// DELETE course
 router.delete('/:id', async (req, res) => {
   try {
-    const courseId = req.params.id;
-    
-    console.log('🔍 Deleting course:', courseId);
-
-    // Check if course exists
-    const courseDoc = await db.collection('courses').doc(courseId).get();
-    if (!courseDoc.exists) {
-      return res.status(404).json({ error: 'Course not found' });
-    }
-
-    await db.collection('courses').doc(courseId).delete();
-    
-    console.log(`🗑️ Course ${courseId} deleted successfully`);
-    
-    res.json({ 
-      message: 'Course deleted successfully',
-      id: courseId
-    });
+    await db.collection('courses').doc(req.params.id).delete();
+    res.json({ message: 'Course deleted successfully' });
   } catch (error) {
-    console.error('❌ Error deleting course:', error);
-    res.status(500).json({ error: 'Failed to delete course: ' + error.message });
+    console.error('Error deleting course:', error);
+    res.status(500).json({ error: 'Failed to delete course' });
   }
 });
 
-// GET courses for students (public) - from ALL approved institutes
-router.get('/public/active', async (req, res) => {
+// HEALTH CHECK endpoint for courses
+router.get('/health/test', async (req, res) => {
   try {
-    console.log('🔍 Fetching public active courses');
-    
-    // First get all approved institutes
-    const institutesSnapshot = await db.collection('institutes')
-      .where('status', '==', 'approved')
-      .get();
-    
-    const approvedInstituteIds = institutesSnapshot.docs.map(doc => doc.id);
-    
-    console.log(`🏫 Found ${approvedInstituteIds.length} approved institutes`);
-    
-    if (approvedInstituteIds.length === 0) {
-      return res.json([]);
-    }
-    
-    // Get active courses from approved institutes
-    const coursesSnapshot = await db.collection('courses')
-      .where('instituteId', 'in', approvedInstituteIds)
-      .where('status', '==', 'active')
-      .orderBy('name')
-      .get();
-    
-    const courses = coursesSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    
-    console.log(`🎓 Found ${courses.length} active courses from ${approvedInstituteIds.length} approved institutes`);
-    res.json(courses);
-  } catch (error) {
-    console.error('❌ Error fetching active courses:', error);
-    res.status(500).json({ error: 'Failed to fetch courses: ' + error.message });
-  }
-});
-
-// GET courses by institute ID (public) - for browsing specific institute courses
-router.get('/public/institute/:instituteId', async (req, res) => {
-  try {
-    const { instituteId } = req.params;
-    
-    console.log('🔍 Fetching public courses for institute:', instituteId);
-    
-    // Verify institute exists and is approved
-    const instituteDoc = await db.collection('institutes').doc(instituteId).get();
-    if (!instituteDoc.exists) {
-      return res.status(404).json({ error: 'Institute not found' });
-    }
-    
-    const institute = instituteDoc.data();
-    if (institute.status !== 'approved') {
-      return res.status(403).json({ error: 'Institute not approved' });
-    }
-
-    // Get active courses for this specific institute
-    const coursesSnapshot = await db.collection('courses')
-      .where('instituteId', '==', instituteId)
-      .where('status', '==', 'active')
-      .orderBy('name')
-      .get();
-    
-    const courses = coursesSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-
-    console.log(`🏫 Found ${courses.length} active courses for institute ${instituteId}`);
-    res.json(courses);
-  } catch (error) {
-    console.error('❌ Error fetching institute courses:', error);
-    res.status(500).json({ error: 'Failed to fetch courses: ' + error.message });
-  }
-});
-
-// Debug endpoint to check courses collection
-router.get('/debug/all', async (req, res) => {
-  try {
-    const snapshot = await db.collection('courses').get();
-    const courses = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    // Test basic Firestore connection
+    const testDoc = await db.collection('courses').doc('test').get();
     
     res.json({
-      total: courses.length,
-      courses: courses
+      status: 'OK',
+      message: 'Courses API is working',
+      firestore: 'connected',
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error in debug endpoint:', error);
+    console.error('Health check failed:', error);
+    res.status(500).json({
+      status: 'ERROR',
+      message: 'Courses API health check failed',
+      error: error.message
+    });
+  }
+});
+
+// INITIALIZE courses collection if empty
+router.post('/initialize', async (req, res) => {
+  try {
+    // Check if courses collection exists and has any data
+    const snapshot = await db.collection('courses').limit(1).get();
+    
+    if (snapshot.empty) {
+      console.log('📝 Courses collection is empty - initializing...');
+      // Add a test course or just return success
+      res.json({ 
+        message: 'Courses collection is ready', 
+        initialized: true 
+      });
+    } else {
+      res.json({ 
+        message: 'Courses collection already has data', 
+        count: snapshot.size 
+      });
+    }
+  } catch (error) {
+    console.error('Initialization error:', error);
     res.status(500).json({ error: error.message });
   }
 });
