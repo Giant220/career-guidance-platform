@@ -10,11 +10,36 @@ import './InstituteDashboard.css';
 
 const InstituteDashboard = () => {
   const { currentUser, logout } = useAuth();
-  const navigate = useNavigate(); // ✅ Fix for logout error
+  const navigate = useNavigate();
   const [institute, setInstitute] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);
   const pollIntervalRef = useRef();
+
+  // Function to fetch course statistics
+  const fetchInstituteStats = async (instituteId) => {
+    if (!currentUser || !instituteId) return null;
+    
+    try {
+      const token = await currentUser.getIdToken();
+      const BACKEND_URL = 'https://career-guidance-platform-3c0y.onrender.com';
+      
+      const response = await fetch(`${BACKEND_URL}/api/courses/quick-stats/${instituteId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const stats = await response.json();
+        return stats;
+      }
+    } catch (error) {
+      console.error('Error fetching institute stats:', error);
+    }
+    return null;
+  };
 
   const fetchUserInstitute = async (showLoading = true) => {
     if (!currentUser) {
@@ -26,7 +51,6 @@ const InstituteDashboard = () => {
       if (showLoading) setLoading(true);
       const token = await currentUser.getIdToken();
 
-      // ✅ Updated to full deployed backend URL
       const BACKEND_URL = 'https://career-guidance-platform-3c0y.onrender.com';
       const response = await fetch(`${BACKEND_URL}/api/institutes`, {
         headers: {
@@ -41,18 +65,31 @@ const InstituteDashboard = () => {
           inst.userId === currentUser.uid || inst.email === currentUser.email
         );
 
+        // If institute found, fetch its statistics
+        let instituteWithStats = userInstitute;
+        if (userInstitute) {
+          const stats = await fetchInstituteStats(userInstitute.id);
+          instituteWithStats = {
+            ...userInstitute,
+            coursesCount: stats?.coursesCount || 0,
+            pendingApplications: stats?.pendingApplications || 0,
+            totalStudents: stats?.totalStudents || 0,
+            admissionRate: stats?.admissionRate || '0%'
+          };
+        }
+
         // Detect status changes
-        if (userInstitute && institute && userInstitute.status !== institute.status) {
-          if (userInstitute.status === 'approved') {
+        if (institute && instituteWithStats && instituteWithStats.status !== institute.status) {
+          if (instituteWithStats.status === 'approved') {
             alert('🎉 Your institute has been approved! You can now manage courses and applications.');
-          } else if (userInstitute.status === 'rejected') {
-            alert(`❌ Your institute has been rejected. Reason: ${userInstitute.rejectionReason || 'No reason provided'}`);
+          } else if (instituteWithStats.status === 'rejected') {
+            alert(`❌ Your institute has been rejected. Reason: ${instituteWithStats.rejectionReason || 'No reason provided'}`);
           }
         }
 
         setInstitute(prev => {
-          if (!prev || JSON.stringify(prev) !== JSON.stringify(userInstitute)) {
-            return userInstitute || null;
+          if (!prev || JSON.stringify(prev) !== JSON.stringify(instituteWithStats)) {
+            return instituteWithStats || null;
           }
           return prev;
         });
@@ -96,7 +133,7 @@ const InstituteDashboard = () => {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/'); // ✅ Works now
+      navigate('/');
     } catch (error) {
       console.error('Failed to logout:', error);
     }
@@ -377,6 +414,10 @@ const InstituteHome = ({ institute, currentUser, onRefresh, lastUpdate }) => {
           <h4>Debug Information</h4>
           <p><strong>Institute ID:</strong> {institute.id}</p>
           <p><strong>Status:</strong> {institute.status}</p>
+          <p><strong>Courses Count:</strong> {institute.coursesCount || 0}</p>
+          <p><strong>Pending Applications:</strong> {institute.pendingApplications || 0}</p>
+          <p><strong>Total Students:</strong> {institute.totalStudents || 0}</p>
+          <p><strong>Admission Rate:</strong> {institute.admissionRate || '0%'}</p>
           <p><strong>User ID:</strong> {currentUser?.uid}</p>
           <p><strong>Last Update:</strong> {lastUpdate}</p>
           <button onClick={onRefresh} className="btn btn-secondary" style={{fontSize: '0.8rem'}}>Force Refresh</button>
