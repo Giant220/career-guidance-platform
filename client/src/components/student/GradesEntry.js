@@ -5,6 +5,7 @@ const GradesEntry = () => {
   const { currentUser } = useAuth();
   const [grades, setGrades] = useState({});
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const subjects = [
     'English', 'Mathematics', 'Science', 'Biology', 'Chemistry', 'Physics',
@@ -24,11 +25,17 @@ const GradesEntry = () => {
 
   const handleSaveGrades = async () => {
     try {
-      // Save grades to Firebase
+      setLoading(true);
+      
+      // Get authentication token
+      const token = await currentUser.getIdToken();
+      console.log('🔍 Saving grades with token...');
+      
       const response = await fetch('/api/students/grades', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           studentId: currentUser.uid,
@@ -36,14 +43,26 @@ const GradesEntry = () => {
         })
       });
 
+      const result = await response.json();
+      
       if (response.ok) {
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
+        console.log('✅ Grades saved successfully');
+      } else {
+        console.error('❌ Save failed:', result);
+        alert(`Error: ${result.error || 'Failed to save grades'}`);
       }
     } catch (error) {
       console.error('Error saving grades:', error);
+      alert('Network error. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
     }
   };
+
+  // Check if all required subjects have grades
+  const hasAllGrades = subjects.every(subject => grades[subject] && grades[subject] !== '');
 
   return (
     <div className="section">
@@ -59,6 +78,7 @@ const GradesEntry = () => {
                 value={grades[subject] || ''}
                 onChange={(e) => handleGradeChange(subject, e.target.value)}
                 className="form-select"
+                required
               >
                 <option value="">Select Grade</option>
                 {gradeOptions.map(grade => (
@@ -71,10 +91,15 @@ const GradesEntry = () => {
 
         <div className="flex-between mt-1">
           <div>
-            {saved && <div className="success">Grades saved successfully!</div>}
+            {saved && <div className="success">✅ Grades saved successfully!</div>}
+            {!hasAllGrades && <div className="warning">⚠️ Please fill all grade fields</div>}
           </div>
-          <button onClick={handleSaveGrades} className="btn">
-            Save Grades
+          <button 
+            onClick={handleSaveGrades} 
+            className="btn"
+            disabled={loading || !hasAllGrades}
+          >
+            {loading ? 'Saving...' : 'Save Grades'}
           </button>
         </div>
       </div>
@@ -109,6 +134,10 @@ const GradesEntry = () => {
           <div className="legend-item">
             <span className="grade-badge F">F</span>
             <span>Fail</span>
+          </div>
+          <div className="legend-item">
+            <span className="grade-badge not-taken">Not Taken</span>
+            <span>Did not take subject</span>
           </div>
         </div>
       </div>
