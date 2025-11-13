@@ -90,25 +90,31 @@ export function AuthProvider({ children }) {
   };
 
   const fetchUserRole = async (uid) => {
-    try {
-      console.log('Fetching user role from backend...');
-      const response = await fetch(`${getApiUrl()}/api/auth/user/${uid}`);
-      
-      console.log('Response status:', response.status);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+  try {
+    console.log('Fetching user role from backend...');
+    const token = await auth.currentUser.getIdToken();  // include token for backend auth
+    const response = await fetch(`${getApiUrl()}/api/auth/user/${uid}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
       }
-      
-      const userData = await response.json();
-      console.log('User data received:', userData);
-      
-      return userData.role;
-    } catch (error) {
-      console.error('Failed to fetch user role:', error);
-      throw error;
+    });
+
+    console.log('Response status:', response.status);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-  };
+
+    const userData = await response.json();
+    console.log('User data received:', userData);
+
+    return userData.role;
+  } catch (error) {
+    console.error('Failed to fetch user role:', error);
+    throw error;
+  }
+};
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
