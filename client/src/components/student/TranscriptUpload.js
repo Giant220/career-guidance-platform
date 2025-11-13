@@ -13,15 +13,39 @@ const TranscriptUpload = () => {
     yearCompleted: ''
   });
 
-  useEffect(() => { fetchTranscripts(); }, []);
+  useEffect(() => { 
+    if (currentUser) {
+      fetchTranscripts(); 
+    }
+  }, [currentUser]);
 
   const fetchTranscripts = async () => {
     try {
-      const response = await fetch(`/api/students/${currentUser?.uid}/transcripts`);
+      // ✅ ADD AUTHENTICATION TOKEN
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/students/${currentUser.uid}/transcripts`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
-      setTranscripts(data);
+      
+      // ✅ ENSURE DATA IS ALWAYS AN ARRAY
+      if (Array.isArray(data)) {
+        setTranscripts(data);
+      } else {
+        console.error('Invalid response format:', data);
+        setTranscripts([]);
+      }
     } catch (error) {
       console.error('Error fetching transcripts:', error);
+      setTranscripts([]); // Set empty array on error
     }
   };
 
@@ -40,9 +64,14 @@ const TranscriptUpload = () => {
 
       if (!uploadResult.success) throw new Error(uploadResult.error);
 
+      // ✅ ADD AUTHENTICATION TOKEN
+      const token = await currentUser.getIdToken();
       const response = await fetch('/api/students/upload-transcript', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           studentId: currentUser.uid,
           ...formData,
@@ -53,11 +82,15 @@ const TranscriptUpload = () => {
         })
       });
 
+      const result = await response.json();
+
       if (response.ok) {
         alert('PDF transcript uploaded successfully!');
         setFormData({ type: 'degree', institution: '', program: '', yearCompleted: '' });
         event.target.value = '';
         fetchTranscripts();
+      } else {
+        alert(`Error: ${result.error || 'Failed to upload transcript'}`);
       }
     } catch (error) {
       alert('Error: ' + error.message);
@@ -72,21 +105,43 @@ const TranscriptUpload = () => {
       link.href = transcript.base64Data;
       link.download = transcript.fileName;
       link.click();
+    } else {
+      alert('No file data available for download');
     }
   };
 
   const deleteTranscript = async (transcriptId, docPath) => {
-    if (window.confirm('Delete this PDF transcript?')) {
-      try {
+    if (!window.confirm('Are you sure you want to delete this transcript?')) return;
+    
+    try {
+      // Delete from Firebase Storage
+      if (docPath) {
         const parts = docPath.split('/');
-        await deletePDFFromFirestore(parts[1], parts[2]);
-        
-        await fetch(`/api/students/transcripts/${transcriptId}`, { method: 'DELETE' });
-        alert('PDF transcript deleted!');
-        fetchTranscripts();
-      } catch (error) {
-        alert('Error deleting transcript');
+        if (parts.length >= 3) {
+          await deletePDFFromFirestore(parts[1], parts[2]);
+        }
       }
+
+      // ✅ ADD AUTHENTICATION TOKEN
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/students/transcripts/${transcriptId}`, { 
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        alert('Transcript deleted successfully!');
+        fetchTranscripts();
+      } else {
+        const result = await response.json();
+        throw new Error(result.error || 'Failed to delete transcript');
+      }
+    } catch (error) {
+      console.error('Error deleting transcript:', error);
+      alert('Error deleting transcript: ' + error.message);
     }
   };
 
@@ -100,55 +155,128 @@ const TranscriptUpload = () => {
           <div className="form-row">
             <div className="form-group">
               <label>Document Type</label>
-              <select value={formData.type} onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value }))}>
+              <select 
+                value={formData.type} 
+                onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value }))}
+                className="form-select"
+              >
                 <option value="degree">Degree</option>
                 <option value="diploma">Diploma</option>
                 <option value="certificate">Certificate</option>
+                <option value="highschool">High School</option>
+                <option value="other">Other</option>
               </select>
             </div>
             <div className="form-group">
-              <label>Institution</label>
-              <input type="text" value={formData.institution} onChange={(e) => setFormData(prev => ({ ...prev, institution: e.target.value }))} required />
+              <label>Institution *</label>
+              <input 
+                type="text" 
+                value={formData.institution} 
+                onChange={(e) => setFormData(prev => ({ ...prev, institution: e.target.value }))} 
+                required 
+                placeholder="e.g., National University of Lesotho"
+              />
             </div>
           </div>
           
           <div className="form-row">
             <div className="form-group">
-              <label>Program</label>
-              <input type="text" value={formData.program} onChange={(e) => setFormData(prev => ({ ...prev, program: e.target.value }))} required />
+              <label>Program/Qualification *</label>
+              <input 
+                type="text" 
+                value={formData.program} 
+                onChange={(e) => setFormData(prev => ({ ...prev, program: e.target.value }))} 
+                required 
+                placeholder="e.g., Bachelor of Science in Computer Science"
+              />
             </div>
             <div className="form-group">
-              <label>Year</label>
-              <input type="number" value={formData.yearCompleted} onChange={(e) => setFormData(prev => ({ ...prev, yearCompleted: e.target.value }))} />
+              <label>Year Completed</label>
+              <input 
+                type="number" 
+                min="1950" 
+                max="2030"
+                value={formData.yearCompleted} 
+                onChange={(e) => setFormData(prev => ({ ...prev, yearCompleted: e.target.value }))} 
+                placeholder="e.g., 2023"
+              />
             </div>
           </div>
 
           <div className="form-group">
-            <label>PDF File</label>
-            <input type="file" accept=".pdf" onChange={handleFileUpload} disabled={uploading} />
-            <small>Only PDF files under 500KB</small>
+            <label>PDF File *</label>
+            <input 
+              type="file" 
+              accept=".pdf" 
+              onChange={handleFileUpload} 
+              disabled={uploading} 
+              required
+            />
+            <small>Only PDF files under 500KB are allowed</small>
           </div>
-          {uploading && <p>⏳ Uploading PDF...</p>}
+          
+          {uploading && (
+            <div className="uploading-message">
+              <p>Uploading PDF... Please wait.</p>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="section">
-        <h3>Your PDF Transcripts</h3>
+        <h3>Your Transcripts ({transcripts.length})</h3>
         <div className="transcripts-list">
-          {transcripts.map(transcript => (
-            <div key={transcript.id} className="transcript-card">
-              <div className="transcript-info">
-                <h4>{transcript.program}</h4>
-                <p>{transcript.institution} • {transcript.yearCompleted}</p>
-                <p>{transcript.fileName} ({(transcript.fileSize / 1024).toFixed(1)}KB)</p>
+          {Array.isArray(transcripts) && transcripts.length > 0 ? (
+            transcripts.map(transcript => (
+              <div key={transcript.id} className="transcript-card">
+                <div className="transcript-info">
+                  <h4>{transcript.program || 'Unknown Program'}</h4>
+                  <p>
+                    <strong>Institution:</strong> {transcript.institution || 'Unknown'} • 
+                    <strong> Year:</strong> {transcript.yearCompleted || 'Not specified'}
+                  </p>
+                  <p>
+                    <strong>File:</strong> {transcript.fileName || 'Unknown file'} • 
+                    <strong> Size:</strong> {transcript.fileSize ? `(${(transcript.fileSize / 1024).toFixed(1)}KB)` : 'Unknown size'}
+                  </p>
+                  <p>
+                    <strong>Type:</strong> {transcript.documentType || transcript.type || 'Not specified'} • 
+                    <strong> Uploaded:</strong> {transcript.uploadDate ? new Date(transcript.uploadDate).toLocaleDateString() : 'Unknown date'}
+                  </p>
+                </div>
+                <div className="transcript-actions">
+                  <button 
+                    onClick={() => downloadPDF(transcript)} 
+                    className="btn btn-secondary"
+                  >
+                    Download
+                  </button>
+                  <button 
+                    onClick={() => deleteTranscript(transcript.id, transcript.docPath)} 
+                    className="btn btn-danger"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
-              <div className="transcript-actions">
-                <button onClick={() => downloadPDF(transcript)} className="btn btn-secondary">Download</button>
-                <button onClick={() => deleteTranscript(transcript.id, transcript.docPath)} className="btn btn-danger">Delete</button>
-              </div>
+            ))
+          ) : (
+            <div className="text-center">
+              <p>No transcripts uploaded yet.</p>
+              <p>Upload your first transcript to get started with job applications.</p>
             </div>
-          ))}
+          )}
         </div>
+      </div>
+
+      <div className="section info-message">
+        <h3>Why Upload Transcripts?</h3>
+        <ul>
+          <li><strong>Job Applications:</strong> Required for automatic qualification checks</li>
+          <li><strong>Course Applications:</strong> Some institutions may require additional documentation</li>
+          <li><strong>Career Guidance:</strong> Helps us provide better career recommendations</li>
+          <li><strong>Portfolio Building:</strong> Keep all your academic records in one place</li>
+        </ul>
       </div>
     </div>
   );
