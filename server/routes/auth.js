@@ -3,7 +3,25 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const db = admin.firestore();
 
-// User registration
+// ✅ AUTH MIDDLEWARE for protected routes
+const authenticate = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.error('Auth middleware error:', error);
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+};
+
+// User registration (public)
 router.post('/signup', async (req, res) => {
   try {
     console.log('=== SIGNUP REQUEST RECEIVED ===');
@@ -94,13 +112,19 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// Get user data by UID
-router.get('/user/:uid', async (req, res) => {
+// ✅ FIXED: Get user data by UID (protected route)
+router.get('/user/:uid', authenticate, async (req, res) => {
   try {
     const { uid } = req.params;
     
-    console.log('Fetching user with UID:', uid);
+    console.log('🔍 Fetching user with UID:', uid);
+    console.log('🔍 Authenticated user:', req.user.uid);
     
+    // ✅ SECURITY: Ensure user can only access their own data
+    if (req.user.uid !== uid) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     if (!uid || uid === 'undefined') {
       return res.status(400).json({ error: 'User ID is required' });
     }
@@ -108,11 +132,18 @@ router.get('/user/:uid', async (req, res) => {
     const userDoc = await db.collection('users').doc(uid).get();
     
     if (!userDoc.exists) {
-      console.log('User not found in Firestore for UID:', uid);
+      console.log('❌ User not found in Firestore for UID:', uid);
       return res.status(404).json({ error: 'User not found' });
     }
     
     const userData = userDoc.data();
+    
+    console.log('✅ User data found:', {
+      uid: uid,
+      email: userData.email,
+      role: userData.role
+    });
+    
     res.json({
       uid: uid,
       email: userData.email,
@@ -121,9 +152,20 @@ router.get('/user/:uid', async (req, res) => {
       status: userData.status
     });
   } catch (error) {
-    console.error('Error fetching user:', error);
-    res.status(500).json({ error: 'Failed to fetch user data' });
+    console.error('❌ Error fetching user:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch user data',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
+});
+
+// ✅ Add a health check endpoint
+router.get('/health', (req, res) => {
+  res.json({ 
+    status: 'Auth routes working',
+    timestamp: new Date().toISOString()
+  });
 });
 
 module.exports = router;
