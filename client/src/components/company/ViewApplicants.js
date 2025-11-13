@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 
-const ViewApplicants = ({ company }) => {
+const ViewApplicants = ({ company, currentUser }) => {
   const [applications, setApplications] = useState([]);
   const [filteredApplications, setFilteredApplications] = useState([]);
   const [selectedApplication, setSelectedApplication] = useState(null);
@@ -12,10 +13,10 @@ const ViewApplicants = ({ company }) => {
   });
 
   useEffect(() => {
-    if (company) {
+    if (company && currentUser) {
       fetchApplications();
     }
-  }, [company]);
+  }, [company, currentUser]);
 
   useEffect(() => {
     filterApplications();
@@ -23,7 +24,18 @@ const ViewApplicants = ({ company }) => {
 
   const fetchApplications = async () => {
     try {
-      const response = await fetch(`/api/companies/${company.id}/applications`);
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/companies/${company.id}/applications`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setApplications(data);
     } catch (error) {
@@ -64,10 +76,12 @@ const ViewApplicants = ({ company }) => {
 
   const handleStatusUpdate = async (applicationId, newStatus) => {
     try {
+      const token = await currentUser.getIdToken();
       const response = await fetch(`/api/companies/applications/${applicationId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           status: newStatus,
@@ -75,19 +89,34 @@ const ViewApplicants = ({ company }) => {
         })
       });
 
+      const result = await response.json();
+
       if (response.ok) {
         alert('Application status updated successfully!');
         fetchApplications();
+      } else {
+        alert(`Error: ${result.error || 'Failed to update application status'}`);
       }
     } catch (error) {
       console.error('Error updating application:', error);
-      alert('Error updating application status');
+      alert('Error updating application status: ' + error.message);
     }
   };
 
   const viewCandidateDetails = async (application) => {
     try {
-      const response = await fetch(`/api/companies/applications/${application.id}/details`);
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/companies/applications/${application.id}/details`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const candidateDetails = await response.json();
       setSelectedApplication({ ...application, ...candidateDetails });
     } catch (error) {
@@ -342,7 +371,7 @@ const ViewApplicants = ({ company }) => {
                     <div key={index} className="qualification-item">
                       <h4>{transcript.program}</h4>
                       <p>{transcript.institution} • {transcript.yearCompleted}</p>
-                      <span className="document-type">{transcript.type}</span>
+                      <span className="document-type">{transcript.documentType || transcript.type}</span>
                       {transcript.verified && (
                         <span className="verification-badge">Verified</span>
                       )}
