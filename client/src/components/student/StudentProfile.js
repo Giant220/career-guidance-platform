@@ -113,7 +113,6 @@ const StudentProfile = () => {
         phoneNumber: profile.phone
       });
 
-      // ✅ ADD AUTHENTICATION TOKEN
       const token = await currentUser.getIdToken();
       const response = await fetch('/api/students/profile', {
         method: 'POST',
@@ -251,7 +250,7 @@ const StudentProfile = () => {
 
           <div className="flex-between">
             <div>
-              {saved && <div className="success">✅ Profile saved successfully!</div>}
+              {saved && <div className="success">Profile saved successfully!</div>}
             </div>
             <button type="submit" className="btn" disabled={saving}>
               {saving ? 'Saving...' : 'Save Profile'}
