@@ -3,17 +3,58 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const db = admin.firestore();
 
+// ✅ ADD AUTHENTICATION MIDDLEWARE
+const authenticateStudent = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('❌ No token provided for student route');
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    
+    if (!token) {
+      console.log('❌ Invalid token format');
+      return res.status(401).json({ error: 'Invalid token format' });
+    }
+
+    console.log('🔍 Verifying token in student route...');
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.user = decodedToken;
+    console.log('✅ Token verified for user:', decodedToken.email);
+    
+    // ✅ SECURITY: Ensure user can only access their own data
+    const requestedStudentId = req.params.id || req.body.studentId;
+    if (requestedStudentId && decodedToken.uid !== requestedStudentId) {
+      console.log('❌ Access denied: User trying to access different student data');
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    next();
+  } catch (error) {
+    console.error('❌ Auth error in student route:', error);
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+};
+
+// ✅ APPLY AUTH MIDDLEWARE TO ALL ROUTES
+router.use(authenticateStudent);
+
 // SIMPLE TEST ROUTE
 router.get('/test', (req, res) => {
   res.json({ 
     message: 'Student routes are working!', 
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    user: req.user.email
   });
 });
 
-// Get student profile
+// Get student profile - FIXED with authentication
 router.get('/:id/profile', async (req, res) => {
   try {
+    console.log('🔍 Fetching profile for student:', req.params.id);
+    
     const studentDoc = await db.collection('students').doc(req.params.id).get();
     
     if (studentDoc.exists) {
@@ -37,7 +78,7 @@ router.get('/:id/profile', async (req, res) => {
   }
 });
 
-// Update student profile
+// Update student profile - FIXED with authentication
 router.post('/profile', async (req, res) => {
   try {
     const { studentId, ...profileData } = req.body;
@@ -64,11 +105,21 @@ router.post('/profile', async (req, res) => {
   }
 });
 
-// Save student grades
+// Save student grades - FIXED with authentication
 router.post('/grades', async (req, res) => {
   try {
     const { studentId, grades } = req.body;
     
+    console.log('💾 Saving grades for student:', studentId);
+    console.log('Grades data:', grades);
+
+    // Validate required fields
+    if (!studentId || !grades) {
+      return res.status(400).json({ 
+        error: 'studentId and grades are required' 
+      });
+    }
+
     const gradeValues = {
       'A*': 6, 'A': 5, 'B': 4, 'C': 3, 'D': 2, 'E': 1, 'F': 0, 'Not Taken': -1
     };
@@ -81,13 +132,56 @@ router.post('/grades', async (req, res) => {
     await db.collection('students').doc(studentId).set({
       grades: numericalGrades,
       rawGrades: grades,
-      gradesUpdated: new Date().toISOString()
+      gradesUpdated: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     }, { merge: true });
 
-    res.json({ success: true, message: 'Grades saved successfully' });
+    console.log('✅ Grades saved successfully for student:', studentId);
+    res.json({ 
+      success: true, 
+      message: 'Grades saved successfully',
+      gradesCount: Object.keys(grades).length
+    });
+
   } catch (error) {
-    console.error('Error saving grades:', error);
-    res.status(500).json({ error: error.message });
+    console.error('❌ Error saving grades:', error);
+    res.status(500).json({ 
+      error: 'Failed to save grades',
+      details: error.message 
+    });
+  }
+});
+
+// Get student grades - NEW ENDPOINT
+router.get('/:id/grades', async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    console.log('🔍 Fetching grades for student:', studentId);
+    
+    const studentDoc = await db.collection('students').doc(studentId).get();
+    
+    if (!studentDoc.exists) {
+      return res.json({
+        grades: {},
+        rawGrades: {},
+        hasGrades: false
+      });
+    }
+
+    const student = studentDoc.data();
+    const response = {
+      grades: student.grades || {},
+      rawGrades: student.rawGrades || {},
+      hasGrades: !!student.grades,
+      gradesUpdated: student.gradesUpdated
+    };
+
+    console.log('✅ Grades found:', Object.keys(response.grades).length, 'subjects');
+    res.json(response);
+
+  } catch (error) {
+    console.error('❌ Error fetching grades:', error);
+    res.status(500).json({ error: 'Failed to fetch grades' });
   }
 });
 
@@ -565,7 +659,7 @@ router.post('/:studentId/jobs/:jobId/apply', async (req, res) => {
       });
     }
 
-    const qualifyResponse = await fetch(`http://localhost:5000/api/students/${studentId}/jobs/${jobId}/qualify`);
+   const qualifyResponse = await fetch(`https://career-guidance-platform-3c0y.onrender.com/api/students/${studentId}/jobs/${jobId}/qualify`);
     const qualifyData = await qualifyResponse.json();
 
     if (!qualifyData.qualified) {
