@@ -43,6 +43,159 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET COURSE STATISTICS for institute dashboard
+router.get('/stats/:instituteId', async (req, res) => {
+  try {
+    const { instituteId } = req.params;
+    
+    console.log('📊 Getting course stats for institute:', instituteId);
+    
+    if (!instituteId) {
+      return res.status(400).json({ error: 'instituteId is required' });
+    }
+
+    // Get all courses for this institute
+    const coursesSnapshot = await db.collection('courses')
+      .where('instituteId', '==', instituteId)
+      .get();
+
+    const courses = [];
+    coursesSnapshot.forEach(doc => {
+      courses.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    // Calculate statistics
+    const totalCourses = courses.length;
+    const activeCourses = courses.filter(course => course.status === 'active').length;
+    const pendingCourses = courses.filter(course => course.status === 'pending').length;
+    
+    // Get applications for these courses (you'll need to implement this based on your applications structure)
+    const applicationsSnapshot = await db.collection('applications')
+      .where('instituteId', '==', instituteId)
+      .get();
+    
+    const totalApplications = applicationsSnapshot.size;
+    const pendingApplications = applicationsSnapshot.docs.filter(doc => 
+      doc.data().status === 'pending'
+    ).length;
+
+    // Get students count (you might need to adjust this based on your students collection structure)
+    const studentsSnapshot = await db.collection('students')
+      .where('instituteId', '==', instituteId)
+      .get();
+    
+    const totalStudents = studentsSnapshot.size;
+
+    // Calculate admission rate
+    const approvedApplications = applicationsSnapshot.docs.filter(doc => 
+      doc.data().status === 'approved'
+    ).length;
+    
+    const admissionRate = totalApplications > 0 
+      ? Math.round((approvedApplications / totalApplications) * 100) 
+      : 0;
+
+    const stats = {
+      coursesCount: totalCourses,
+      activeCourses: activeCourses,
+      pendingCourses: pendingCourses,
+      totalApplications: totalApplications,
+      pendingApplications: pendingApplications,
+      totalStudents: totalStudents,
+      admissionRate: `${admissionRate}%`,
+      lastUpdated: new Date().toISOString()
+    };
+
+    console.log(`📊 Stats for institute ${instituteId}:`, stats);
+    res.json(stats);
+
+  } catch (error) {
+    console.error('❌ Error getting course stats:', error);
+    
+    // Return default stats if there's an error
+    res.json({
+      coursesCount: 0,
+      activeCourses: 0,
+      pendingCourses: 0,
+      totalApplications: 0,
+      pendingApplications: 0,
+      totalStudents: 0,
+      admissionRate: '0%',
+      lastUpdated: new Date().toISOString(),
+      error: error.message
+    });
+  }
+});
+
+// GET QUICK STATS (simplified version for dashboard)
+router.get('/quick-stats/:instituteId', async (req, res) => {
+  try {
+    const { instituteId } = req.params;
+    
+    console.log('📊 Getting quick stats for institute:', instituteId);
+
+    // Get courses count
+    const coursesSnapshot = await db.collection('courses')
+      .where('instituteId', '==', instituteId)
+      .get();
+
+    const coursesCount = coursesSnapshot.size;
+
+    // Get pending applications count
+    const applicationsSnapshot = await db.collection('applications')
+      .where('instituteId', '==', instituteId)
+      .where('status', '==', 'pending')
+      .get();
+
+    const pendingApplications = applicationsSnapshot.size;
+
+    // Get total students count
+    const studentsSnapshot = await db.collection('students')
+      .where('instituteId', '==', instituteId)
+      .get();
+
+    const totalStudents = studentsSnapshot.size;
+
+    // Calculate admission rate
+    const allApplicationsSnapshot = await db.collection('applications')
+      .where('instituteId', '==', instituteId)
+      .get();
+
+    const totalApplications = allApplicationsSnapshot.size;
+    const approvedApplications = allApplicationsSnapshot.docs.filter(doc => 
+      doc.data().status === 'approved'
+    ).length;
+
+    const admissionRate = totalApplications > 0 
+      ? Math.round((approvedApplications / totalApplications) * 100) 
+      : 0;
+
+    const quickStats = {
+      coursesCount: coursesCount,
+      pendingApplications: pendingApplications,
+      totalStudents: totalStudents,
+      admissionRate: `${admissionRate}%`
+    };
+
+    console.log(`📊 Quick stats for institute ${instituteId}:`, quickStats);
+    res.json(quickStats);
+
+  } catch (error) {
+    console.error('❌ Error getting quick stats:', error);
+    
+    // Return safe default stats
+    res.json({
+      coursesCount: 0,
+      pendingApplications: 0,
+      totalStudents: 0,
+      admissionRate: '0%'
+    });
+  }
+});
+
 // CREATE new course - SIMPLIFIED
 router.post('/', async (req, res) => {
   try {
@@ -185,31 +338,6 @@ router.get('/health/test', async (req, res) => {
       message: 'Courses API health check failed',
       error: error.message
     });
-  }
-});
-
-// INITIALIZE courses collection if empty
-router.post('/initialize', async (req, res) => {
-  try {
-    // Check if courses collection exists and has any data
-    const snapshot = await db.collection('courses').limit(1).get();
-    
-    if (snapshot.empty) {
-      console.log('📝 Courses collection is empty - initializing...');
-      // Add a test course or just return success
-      res.json({ 
-        message: 'Courses collection is ready', 
-        initialized: true 
-      });
-    } else {
-      res.json({ 
-        message: 'Courses collection already has data', 
-        count: snapshot.size 
-      });
-    }
-  } catch (error) {
-    console.error('Initialization error:', error);
-    res.status(500).json({ error: error.message });
   }
 });
 
